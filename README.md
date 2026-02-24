@@ -71,9 +71,9 @@ All components communicate via **explicit JSON APIs**.
 
 The complete, authoritative system design lives in:
 
-- `implementation_plan.md`
+- `docs/` (see `docs/README.md` for the index)
 
-This document defines:
+This directory contains:
 - security model
 - data ownership rules
 - storage layout
