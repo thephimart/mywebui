@@ -32,7 +32,7 @@ class ModelsConfig(BaseModel):
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     filesystem: dict = {"enabled": True, "allowed_paths": []}
-    web: dict = {"enabled": False}
+    web: dict = {"enabled": False, "interact_enabled": False}
 
 
 class ComfyUIConfig(BaseModel):
