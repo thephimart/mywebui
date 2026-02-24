@@ -18,7 +18,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/api/v1/health",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
-        "/api/v1/wizard",
+        "/api/v1/wizard/status",
+        "/api/v1/wizard/admin",
         "/docs",
         "/redoc",
         "/openapi.json",
@@ -37,7 +38,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         token = request.cookies.get("session_token")
 
         if not token:
-            if request.url.path.startswith("/api/v1/") and request.url.path not in ["/api/v1/auth/login", "/api/v1/auth/register"]:
+            if request.url.path.startswith("/api/v1/") and request.url.path not in ["/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/wizard/status", "/api/v1/wizard/admin"]:
                 return Response(
                     content='{"detail": "Not authenticated"}',
                     status_code=401,
