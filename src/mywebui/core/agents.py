@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-from mywebui.core.models import ChatModel, Message, get_chat_model, get_embedding_model
+from mywebui.core.models import BaseChatModel, Message, get_chat_model, get_embedding_model
 from mywebui.core.tools import get_tool_registry, ToolResult
 
 
@@ -21,8 +21,8 @@ class AgentState:
 class AgentResponse:
     """Response from the agent."""
     content: str
-    tool_calls: list[dict[str, Any]] = field(default_factory=list)
     done: bool
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
 
 
