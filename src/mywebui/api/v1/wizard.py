@@ -24,7 +24,7 @@ class AdminCreateRequest(BaseModel):
 
 class AdminCreateResponse(BaseModel):
     """Admin user creation response."""
-    user_id: uuid.UUID
+    user_id: str
     username: str
 
 
@@ -52,16 +52,18 @@ async def get_wizard_status():
 @router.post("/admin", response_model=AdminCreateResponse)
 async def create_admin_user(request: AdminCreateRequest):
     """Create the first admin user (only available during setup)."""
-    if _is_initialized():
+    config_path = storage.get_config_dir() / "system.yaml"
+    
+    if config_path.exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="System already initialized",
         )
     
+    storage.init_storage()
+    
     from mywebui.db import connection
     from mywebui.core.users import create_user
-    
-    storage.init_storage()
     
     factory = connection.get_docs_session_factory()
     async with factory() as db:
