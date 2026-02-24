@@ -18,6 +18,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         "/api/v1/health",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
+        "/api/v1/wizard",
         "/docs",
         "/redoc",
         "/openapi.json",
