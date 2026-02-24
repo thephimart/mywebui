@@ -143,14 +143,13 @@ class WebSearchTool(BaseTool):
 
     def __init__(self):
         super().__init__("web", "Search the web")
-        self.client = None
 
     def validate_args(self, **kwargs) -> bool:
         return "query" in kwargs
 
     async def execute(self, **kwargs) -> ToolResult:
         config = get_config()
-        
+
         if not config.tools.web.get("enabled", False):
             return ToolResult(
                 success=False,
@@ -158,39 +157,25 @@ class WebSearchTool(BaseTool):
                 logs={},
                 error="Web search is disabled",
             )
-        
+
         try:
-            import httpx
+            from ddgs import DDGS
             query = kwargs["query"]
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "https://api.duckduckgo.com/",
-                    params={"q": query, "format": "json"},
-                    timeout=10.0,
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    results = data.get("RelatedTopics", [])
-                    
-                    output = "\n\n".join([
-                        f"{r.get('Text', '')}" for r in results[:5]
-                    ])
-                    
-                    return ToolResult(
-                        success=True,
-                        output=output,
-                        logs={"query": query, "count": len(results)},
-                    )
-                else:
-                    return ToolResult(
-                        success=False,
-                        output="",
-                        logs={},
-                        error=f"HTTP {response.status_code}",
-                    )
-        
+
+            ddgs = DDGS()
+            results = ddgs.text(query, max_results=5)
+
+            output = "\n\n".join([
+                f"{r.get('title', '')}: {r.get('href', '')}"
+                for r in results
+            ])
+
+            return ToolResult(
+                success=True,
+                output=output,
+                logs={"query": query, "count": len(results)},
+            )
+
         except Exception as e:
             return ToolResult(
                 success=False,
