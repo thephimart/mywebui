@@ -1,16 +1,43 @@
 """FastAPI application entry point."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from mywebui.api.v1 import auth, chat, sessions, tools, attachments, docs, comfyui, models, config, users, audit, wizard
+from mywebui import storage
+from mywebui.api.v1 import (
+    attachments,
+    audit,
+    auth,
+    chat,
+    comfyui,
+    config,
+    docs,
+    models,
+    sessions,
+    tools,
+    users,
+    wizard,
+)
+from mywebui.middleware import AuthMiddleware
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
+    storage.init_storage()
+    yield
+
 
 app = FastAPI(
     title="mywebui",
     description="Local-first Web UI for AI and automation workloads",
     version="0.1.0a1",
+    lifespan=lifespan,
 )
 
+app.add_middleware(AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -1,8 +1,9 @@
 """Database models."""
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.sqlite import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -21,7 +22,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(Enum("admin", "user", name="user_role"), nullable=False, default="user")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class Document(Base):
@@ -36,9 +37,9 @@ class Document(Base):
     allowed_roles: Mapped[list] = mapped_column(JSON, default=list)
     categories: Mapped[list] = mapped_column(JSON, default=list)
     source: Mapped[str] = mapped_column(String(500), nullable=True)
-    hash: Mapped[str] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
-    updated_at: Mapped[str] = mapped_column(DateTime, nullable=True)
+    doc_hash: Mapped[str] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     __table_args__ = (
         Index("idx_documents_owner", "owner_id"),
@@ -57,7 +58,7 @@ class Chunk(Base):
     media_ref: Mapped[str] = mapped_column(String(1000), nullable=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[str] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
         Index("idx_chunks_document", "document_id"),
@@ -85,7 +86,7 @@ class AuditEvent(Base):
     __tablename__ = "audit_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    timestamp: Mapped[str] = mapped_column(DateTime, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     details: Mapped[dict] = mapped_column(JSON, default=dict)
