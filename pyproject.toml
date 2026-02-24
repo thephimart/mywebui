@@ -1,0 +1,37 @@
+[project]
+name = "mywebui"
+version = "0.1.0a1"
+description = "Local-first Web UI for AI and automation workloads (pure Python)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+authors = [
+  { name = "Philip Martens" }
+]
+
+keywords = [
+  "local-first",
+  "webui",
+  "ai",
+  "automation",
+  "developer-tools",
+  "pure-python"
+]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: User Interfaces",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: System :: Distributed Computing",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent"
+]
+
+[project.urls]
+Homepage = "https://github.com/thephimart/mywebui"
+Repository = "https://github.com/thephimart/mywebui"
+Issues = "https://github.com/thephimart/mywebui/issues"
