@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from mywebui.core.rag import RetrievedChunk, RAGService
+from mywebui.core.rag import Modality, RetrievedChunk, RAGService
 
 
 FIXED_CORPUS = [
@@ -277,7 +277,7 @@ class BenchmarkFixture:
                     document_id=doc_id,
                     text=chunk_text,
                     score=0.0,
-                    modality="text",
+                    modality=Modality.TEXT,
                 )
                 self.chunks.append((doc["id"], chunk))
 

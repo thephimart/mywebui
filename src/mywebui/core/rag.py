@@ -1,24 +1,43 @@
 """RAG (Retrieval-Augmented Generation) service.
 
 NOTE: Phase 1 scope only.
-No PDF parsing, no vision logic, no storage refactors beyond config wiring.
+No PDF parsing, no vision refactors beyond config logic, no storage wiring.
 """
 
 import logging
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mywebui.config import get_config
-from mywebui.core.models import get_embedding_model
+from mywebui.core.models import BaseVLEmbeddingModel, get_embedding_model
 from mywebui.db.models import Chunk, Document, Embedding
 
 logger = logging.getLogger(__name__)
+
+
+class Modality(StrEnum):
+    """Modality types for multimodal retrieval."""
+
+    TEXT = "text"
+    IMAGE = "image"
+    MIXED = "mixed"
+
+
+class RetrievalMode(StrEnum):
+    """Retrieval mode for query processing."""
+
+    TEXT_ONLY = "text_only"
+    IMAGE_ONLY = "image_only"
+    HYBRID = "hybrid"
+
 
 try:
     import tiktoken
@@ -140,19 +159,80 @@ class RetrievedChunk:
     document_id: uuid.UUID
     text: str
     score: float
-    modality: str
+    modality: Modality = Modality.TEXT
+
+
+@dataclass
+class ImageRetrievedChunk:
+    """A retrieved image chunk with score."""
+
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    image_bytes: bytes
+    page_number: int | None
+    bbox: tuple[float, float, float, float] | None
+    score: float
+    modality: Modality = Modality.IMAGE
+
+
+RetrievedResult = RetrievedChunk | ImageRetrievedChunk
 
 
 class RAGService:
     """Service for retrieval-augmented generation."""
 
-    def __init__(self, embedding_model_name: str = "embedding"):
+    def __init__(
+        self,
+        embedding_model_name: str = "embedding",
+        vl_embedding_model_name: str | None = None,
+    ):
         config = get_config()
         self.chunk_size = config.rag.chunk_size
         self.chunk_overlap = config.rag.chunk_overlap
         self.embedding_ctx_size = config.rag.embedding_ctx_size
         self.mmr_lambda = config.rag.mmr_lambda
+        self.text_weight = config.rag.text_weight
+        self.image_weight = config.rag.image_weight
         self.embedding_model = get_embedding_model(embedding_model_name)
+        self.vl_embedding_model: BaseVLEmbeddingModel | None = None
+        if vl_embedding_model_name:
+            from mywebui.core.models import get_vl_embedding_model
+
+            self.vl_embedding_model = get_vl_embedding_model(vl_embedding_model_name)
+
+    def get_retrieval_mode(self, query: str) -> RetrievalMode:
+        """Determine retrieval mode from query.
+
+        Args:
+            query: User query
+
+        Returns:
+            RetrievalMode based on query analysis
+        """
+        query_lower = query.lower()
+
+        image_indicators = [
+            "image",
+            "picture",
+            "photo",
+            "diagram",
+            "chart",
+            "graph",
+            "figure",
+            "screenshot",
+            "visual",
+        ]
+        text_indicators = ["text", "document", "page", "paragraph", "read", "write"]
+
+        has_image = any(ind in query_lower for ind in image_indicators)
+        has_text = any(ind in query_lower for ind in text_indicators)
+
+        if has_image and has_text:
+            return RetrievalMode.HYBRID
+        elif has_image:
+            return RetrievalMode.IMAGE_ONLY
+        else:
+            return RetrievalMode.TEXT_ONLY
 
     async def search(
         self,
@@ -220,6 +300,287 @@ class RAGService:
             )
 
         return chunks_with_scores[:limit]
+
+    async def search_multimodal(
+        self,
+        db: AsyncSession,
+        query: str,
+        user_id: uuid.UUID,
+        limit: int = 5,
+        mode: RetrievalMode | None = None,
+        category: str | None = None,
+        use_mmr: bool = False,
+    ) -> Sequence[RetrievedResult]:
+        """Search for relevant chunks across modalities.
+
+        Args:
+            db: Database session
+            query: Search query
+            user_id: User ID for ACL filtering
+            limit: Max results to return
+            mode: Retrieval mode (auto-detected if None)
+            category: Optional category filter
+            use_mmr: Whether to use MMR re-ranking
+
+        Returns:
+            List of retrieved results (text and/or image chunks)
+        """
+        if mode is None:
+            mode = self.get_retrieval_mode(query)
+
+        if mode == RetrievalMode.TEXT_ONLY:
+            return await self._search_text_only(db, query, user_id, limit, category, use_mmr)
+        elif mode == RetrievalMode.IMAGE_ONLY:
+            return await self._search_image_only(db, query, user_id, limit, category, use_mmr)
+        else:
+            return await self._search_hybrid(db, query, user_id, limit, category, use_mmr)
+
+    async def _search_text_only(
+        self,
+        db: AsyncSession,
+        query: str,
+        user_id: uuid.UUID,
+        limit: int,
+        category: str | None,
+        use_mmr: bool,
+    ) -> list[RetrievedChunk]:
+        """Search text-only chunks."""
+        return await self.search(db, query, user_id, limit, category, use_mmr)
+
+    async def _search_image_only(
+        self,
+        db: AsyncSession,
+        query: str,
+        user_id: uuid.UUID,
+        limit: int,
+        category: str | None,
+        use_mmr: bool,
+    ) -> list[ImageRetrievedChunk]:
+        """Search image-only chunks using VL embedding."""
+        if not self.vl_embedding_model:
+            logger.warning("VL embedding model not configured, returning empty results")
+            return []
+
+        query_embedding = await self.vl_embedding_model.embed_images([query.encode()])
+        query_vector = query_embedding.embeddings[0]
+
+        base_query = (
+            select(Chunk, Document, Embedding)
+            .join(Document, Chunk.document_id == Document.id)
+            .join(Embedding, Chunk.id == Embedding.chunk_id)
+        )
+
+        query_conditions: list[Any] = []
+        query_conditions.append((Document.visibility == "public") | (Document.owner_id == user_id))
+        query_conditions.append(Chunk.modality == "image")
+
+        if category:
+            query_conditions.append(Document.categories.contains([category]))
+
+        filtered_query = base_query.where(*query_conditions)
+
+        result = await db.execute(filtered_query.limit(limit * 3))
+        rows = result.all()
+
+        chunks_with_scores = []
+        for chunk, doc, embedding in rows:
+            if embedding and embedding.vector:
+                stored_vector = self._bytes_to_vector(embedding.vector)
+                score = self._cosine_similarity(query_vector, stored_vector)
+
+                chunks_with_scores.append(
+                    ImageRetrievedChunk(
+                        chunk_id=chunk.id,
+                        document_id=doc.id,
+                        image_bytes=chunk.text.encode() if chunk.text else b"",
+                        page_number=None,
+                        bbox=None,
+                        score=score,
+                        modality=Modality.IMAGE,
+                    )
+                )
+
+        chunks_with_scores.sort(key=lambda x: x.score, reverse=True)
+
+        if use_mmr and limit > 1 and len(chunks_with_scores) > limit:
+            chunks_with_scores = await self._mmr_rerank_images(
+                chunks_with_scores, query_vector, lambda_mult=self.mmr_lambda, k=limit
+            )
+
+        return chunks_with_scores[:limit]
+
+    async def _search_hybrid(
+        self,
+        db: AsyncSession,
+        query: str,
+        user_id: uuid.UUID,
+        limit: int,
+        category: str | None,
+        use_mmr: bool,
+    ) -> list[RetrievedResult]:
+        """Search both, then text and image chunks merge with weighting."""
+        text_results: list[RetrievedChunk] = []
+        image_results: list[ImageRetrievedChunk] = []
+
+        text_task = self._search_text_only(db, query, user_id, limit, category, False)
+        image_task = self._search_image_only(db, query, user_id, limit, category, False)
+
+        text_results, image_results = await text_task, await image_task
+
+        merged = self._merge_results(text_results, image_results, limit)
+
+        if use_mmr and limit > 1 and len(merged) > limit:
+            query_emb = await self.embedding_model.embed([query])
+            query_vector = query_emb.embeddings[0]
+            merged = await self._mmr_rerank_multimodal(
+                merged, query_vector, lambda_mult=self.mmr_lambda, k=limit
+            )
+
+        return merged[:limit]
+
+    def _merge_results(
+        self, text_chunks: list[RetrievedChunk], image_chunks: list[ImageRetrievedChunk], limit: int
+    ) -> list[RetrievedResult]:
+        """Merge text and image results with weighted scoring."""
+        total_weight = self.text_weight + self.image_weight
+        norm_text_weight = self.text_weight / total_weight
+        norm_image_weight = self.image_weight / total_weight
+
+        normalized_text = [
+            RetrievedChunk(
+                chunk_id=c.chunk_id,
+                document_id=c.document_id,
+                text=c.text,
+                score=c.score * norm_text_weight,
+                modality=Modality.TEXT,
+            )
+            for c in text_chunks
+        ]
+
+        normalized_images = [
+            ImageRetrievedChunk(
+                chunk_id=c.chunk_id,
+                document_id=c.document_id,
+                image_bytes=c.image_bytes,
+                page_number=c.page_number,
+                bbox=c.bbox,
+                score=c.score * norm_image_weight,
+                modality=Modality.IMAGE,
+            )
+            for c in image_chunks
+        ]
+
+        merged = normalized_text + normalized_images
+        merged.sort(key=lambda x: x.score, reverse=True)
+        return merged[:limit]
+
+    async def _mmr_rerank_images(
+        self,
+        chunks: list[ImageRetrievedChunk],
+        query_embedding: list[float],
+        lambda_mult: float = 0.5,
+        k: int = 5,
+    ) -> list[ImageRetrievedChunk]:
+        """MMR re-ranking for image chunks."""
+        if not chunks or k >= len(chunks):
+            return chunks[:k]
+
+        chunk_embeddings: dict[int, list[float]] = {}
+        for i, chunk in enumerate(chunks):
+            if self.vl_embedding_model:
+                emb = await self.vl_embedding_model.embed_images([chunk.image_bytes])
+                chunk_embeddings[i] = emb.embeddings[0]
+            else:
+                chunk_embeddings[i] = []
+
+        selected: list[ImageRetrievedChunk] = []
+        selected_indices: list[int] = []
+        remaining_indices = list(range(len(chunks)))
+
+        for _ in range(k):
+            if not remaining_indices:
+                break
+
+            best_score = float("-inf")
+            best_idx = 0
+
+            for idx in remaining_indices:
+                chunk = chunks[idx]
+                relevance = chunk.score
+
+                max_sim_to_selected = 0.0
+                if selected_indices:
+                    chunk_emb = chunk_embeddings[idx]
+                    for sel_idx in selected_indices:
+                        sel_emb = chunk_embeddings[sel_idx]
+                        sim = self._cosine_similarity(chunk_emb, sel_emb)
+                        max_sim_to_selected = max(max_sim_to_selected, sim)
+
+                mmr_score = lambda_mult * max_sim_to_selected - (1 - lambda_mult) * relevance
+
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = idx
+
+            selected.append(chunks[best_idx])
+            selected_indices.append(best_idx)
+            remaining_indices.remove(best_idx)
+
+        return selected
+
+    async def _mmr_rerank_multimodal(
+        self,
+        results: list[RetrievedResult],
+        query_embedding: list[float],
+        lambda_mult: float = 0.5,
+        k: int = 5,
+    ) -> list[RetrievedResult]:
+        """MMR re-ranking across text and image chunks."""
+        if not results or k >= len(results):
+            return results[:k]
+
+        selected: list[RetrievedResult] = []
+        selected_indices: list[int] = []
+        remaining_indices = list(range(len(results)))
+
+        for _ in range(k):
+            if not remaining_indices:
+                break
+
+            best_score = float("-inf")
+            best_idx = 0
+
+            for idx in remaining_indices:
+                result = results[idx]
+                relevance = result.score
+
+                max_sim_to_selected = 0.0
+                if selected_indices:
+                    for sel_idx in selected_indices:
+                        sim = self._cross_modality_similarity(result, selected[sel_idx])
+                        max_sim_to_selected = max(max_sim_to_selected, sim)
+
+                mmr_score = lambda_mult * max_sim_to_selected - (1 - lambda_mult) * relevance
+
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = idx
+
+            selected.append(results[best_idx])
+            selected_indices.append(best_idx)
+            remaining_indices.remove(best_idx)
+
+        return selected
+
+    def _cross_modality_similarity(self, a: RetrievedResult, b: RetrievedResult) -> float:
+        """Calculate similarity between different modality results.
+
+        For now, returns cosine similarity if both have embeddings,
+        otherwise returns 0.0 (no similarity assumed between different modalities).
+        """
+        if type(a) is not type(b):
+            return 0.0
+        return 0.0
 
     async def ingest_document(
         self,

@@ -55,6 +55,18 @@ class EmbeddingResult:
     model: str
 
 
+@dataclass
+class ImageInput:
+    """Image input for VL embedding models."""
+
+    bytes: bytes
+    format: str | None = None
+
+
+TextInput = str
+EmbeddingInput = str | ImageInput
+
+
 class BaseChatModel(ABC):
     """Base class for chat models."""
 
@@ -211,8 +223,81 @@ class OpenAICompatibleEmbeddingModel(BaseEmbeddingModel):
         )
 
 
+class BaseVLEmbeddingModel(ABC):
+    """Base class for vision-language embedding models."""
+
+    @abstractmethod
+    async def embed_images(self, images: list[bytes]) -> EmbeddingResult:
+        """Generate embeddings for images."""
+        pass
+
+
+class OpenAICompatibleVLEmbeddingModel(BaseVLEmbeddingModel):
+    """OpenAI-compatible vision-language embedding model.
+
+    Supports multimodal embedding APIs that accept image URLs or base64.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        model: str,
+        api_key: str | None = None,
+        dimension: int | None = None,
+    ):
+        self.url = url.rstrip("/")
+        self.model = model
+        self.api_key = api_key
+        self.dimension = dimension
+        self._client: httpx.AsyncClient | None = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self.url,
+                timeout=60.0,
+            )
+        return self._client
+
+    async def embed_images(self, images: list[bytes]) -> EmbeddingResult:
+        import base64
+
+        inputs: list[dict[str, Any]] = []
+        for img_bytes in images:
+            b64 = base64.b64encode(img_bytes).decode("utf-8")
+            inputs.append(
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+            )
+
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "input": inputs,
+        }
+
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        response = await self.client.post(
+            "/v1/embeddings",
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        embeddings = [item["embedding"] for item in data["data"]]
+
+        return EmbeddingResult(
+            embeddings=embeddings,
+            model=data["model"],
+        )
+
+
 _chat_models: dict[str, BaseChatModel] = {}
 _embedding_models: dict[str, BaseEmbeddingModel] = {}
+_vl_embedding_models: dict[str, BaseVLEmbeddingModel] = {}
 
 
 def get_chat_model(role: str = "main") -> BaseChatModel:
@@ -244,3 +329,19 @@ def get_embedding_model(role: str = "embedding") -> BaseEmbeddingModel:
         )
 
     return _embedding_models[role]
+
+
+def get_vl_embedding_model(role: str = "image_embedding") -> BaseVLEmbeddingModel:
+    """Get a vision-language embedding model by role."""
+    if role not in _vl_embedding_models:
+        config = get_config()
+        model_config = config.models.image_embedding
+
+        _vl_embedding_models[role] = OpenAICompatibleVLEmbeddingModel(
+            url=model_config.get("url", "http://localhost:11434"),
+            model=model_config.get("model", "qwen2-vl-2b"),
+            api_key=model_config.get("api_key"),
+            dimension=config.rag.embedding_dimension,
+        )
+
+    return _vl_embedding_models[role]

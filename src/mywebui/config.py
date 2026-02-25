@@ -47,6 +47,17 @@ class RAGConfig(BaseModel):
     embedding_ctx_size: int = 8192
     embedding_dimension: int = 2048
     mmr_lambda: float = 0.5
+    text_weight: float = 0.7
+    image_weight: float = 0.3
+
+
+class ModalityConfig(BaseModel):
+    """Modality gating configuration."""
+
+    default_mode: str = "hybrid"
+    text_only_enabled: bool = True
+    image_only_enabled: bool = True
+    hybrid_enabled: bool = True
 
 
 class ComfyUIConfig(BaseModel):
@@ -68,6 +79,7 @@ class Config(BaseSettings):
     tools: ToolsConfig = ToolsConfig()
     rag: RAGConfig = RAGConfig()
     comfyui: ComfyUIConfig = ComfyUIConfig()
+    modality: ModalityConfig = ModalityConfig()
 
     @property
     def data_dir(self) -> Path:

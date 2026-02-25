@@ -243,7 +243,7 @@ class TestMMRReranking:
         """MMR guard should handle k=1 case."""
         import uuid
 
-        from mywebui.core.rag import RetrievedChunk
+        from mywebui.core.rag import Modality, RetrievedChunk
 
         chunks = [
             RetrievedChunk(
@@ -251,7 +251,7 @@ class TestMMRReranking:
                 document_id=uuid.uuid4(),
                 text="Test",
                 score=0.9,
-                modality="text",
+                modality=Modality.TEXT,
             ),
         ]
 
@@ -287,7 +287,7 @@ class TestMMRReranking:
         """MMR should return all chunks when k > len(chunks)."""
         import uuid
 
-        from mywebui.core.rag import RetrievedChunk
+        from mywebui.core.rag import Modality, RetrievedChunk
 
         chunks = [
             RetrievedChunk(
@@ -295,14 +295,14 @@ class TestMMRReranking:
                 document_id=uuid.uuid4(),
                 text="Test",
                 score=0.9,
-                modality="text",
+                modality=Modality.TEXT,
             ),
             RetrievedChunk(
                 chunk_id=uuid.uuid4(),
                 document_id=uuid.uuid4(),
                 text="Test 2",
                 score=0.8,
-                modality="text",
+                modality=Modality.TEXT,
             ),
         ]
 
@@ -361,3 +361,184 @@ class TestCosineSimilarity:
         vec2 = [1.0, 2.0, 3.0]
         result = service._cosine_similarity(vec1, vec2)
         assert result == 0.0
+
+
+class TestModalityEnum:
+    """Tests for Modality enum."""
+
+    def test_modality_values(self):
+        """Modality enum has correct values."""
+        from mywebui.core.rag import Modality
+
+        assert Modality.TEXT.value == "text"
+        assert Modality.IMAGE.value == "image"
+        assert Modality.MIXED.value == "mixed"
+
+    def test_retrieval_mode_values(self):
+        """RetrievalMode enum has correct values."""
+        from mywebui.core.rag import RetrievalMode
+
+        assert RetrievalMode.TEXT_ONLY.value == "text_only"
+        assert RetrievalMode.IMAGE_ONLY.value == "image_only"
+        assert RetrievalMode.HYBRID.value == "hybrid"
+
+
+class TestImageRetrievedChunk:
+    """Tests for ImageRetrievedChunk dataclass."""
+
+    def test_creation(self):
+        """Can create ImageRetrievedChunk."""
+        import uuid
+
+        from mywebui.core.rag import ImageRetrievedChunk, Modality
+
+        chunk = ImageRetrievedChunk(
+            chunk_id=uuid.uuid4(),
+            document_id=uuid.uuid4(),
+            image_bytes=b"fake image data",
+            page_number=1,
+            bbox=(0.0, 0.0, 100.0, 100.0),
+            score=0.95,
+            modality=Modality.IMAGE,
+        )
+        assert chunk.image_bytes == b"fake image data"
+        assert chunk.page_number == 1
+        assert chunk.modality == Modality.IMAGE
+
+
+class TestRetrievalModeDetection:
+    """Tests for query-based retrieval mode detection."""
+
+    def test_detects_image_query(self):
+        """Detects image-only query."""
+        from mywebui.core.rag import RAGService, RetrievalMode
+
+        service = RAGService.__new__(RAGService)
+        result = service.get_retrieval_mode("show me the chart")
+        assert result == RetrievalMode.IMAGE_ONLY
+
+    def test_detects_text_query(self):
+        """Detects text-only query."""
+        from mywebui.core.rag import RAGService, RetrievalMode
+
+        service = RAGService.__new__(RAGService)
+        result = service.get_retrieval_mode("read the document")
+        assert result == RetrievalMode.TEXT_ONLY
+
+    def test_detects_hybrid_query(self):
+        """Detects hybrid query."""
+        from mywebui.core.rag import RAGService, RetrievalMode
+
+        service = RAGService.__new__(RAGService)
+        result = service.get_retrieval_mode("find the image and read the text")
+        assert result == RetrievalMode.HYBRID
+
+
+class TestCrossModalitySimilarity:
+    """Tests for cross-modality similarity calculation."""
+
+    def test_different_modalities_return_zero(self):
+        """Different modalities return 0.0."""
+        import uuid
+
+        from mywebui.core.rag import (
+            ImageRetrievedChunk,
+            RAGService,
+            RetrievedChunk,
+        )
+
+        service = RAGService.__new__(RAGService)
+        text_chunk = RetrievedChunk(
+            chunk_id=uuid.uuid4(),
+            document_id=uuid.uuid4(),
+            text="test",
+            score=0.9,
+        )
+        image_chunk = ImageRetrievedChunk(
+            chunk_id=uuid.uuid4(),
+            document_id=uuid.uuid4(),
+            image_bytes=b"data",
+            page_number=1,
+            bbox=None,
+            score=0.8,
+        )
+
+        result = service._cross_modality_similarity(text_chunk, image_chunk)
+        assert result == 0.0
+
+    def test_same_modalities_return_zero(self):
+        """Same modalities currently return 0.0 (placeholder)."""
+        import uuid
+
+        from mywebui.core.rag import RAGService, RetrievedChunk
+
+        service = RAGService.__new__(RAGService)
+        chunk1 = RetrievedChunk(
+            chunk_id=uuid.uuid4(),
+            document_id=uuid.uuid4(),
+            text="test1",
+            score=0.9,
+        )
+        chunk2 = RetrievedChunk(
+            chunk_id=uuid.uuid4(),
+            document_id=uuid.uuid4(),
+            text="test2",
+            score=0.8,
+        )
+
+        result = service._cross_modality_similarity(chunk1, chunk2)
+        assert result == 0.0
+
+
+class TestResultMerging:
+    """Tests for merging text and image results."""
+
+    def test_merge_with_weights(self):
+        """Merges results with configured weights."""
+        import uuid
+
+        from mywebui.core.rag import (
+            ImageRetrievedChunk,
+            RAGService,
+            RetrievedChunk,
+        )
+
+        service = RAGService.__new__(RAGService)
+        service.text_weight = 0.7
+        service.image_weight = 0.3
+
+        text_chunks = [
+            RetrievedChunk(
+                chunk_id=uuid.uuid4(),
+                document_id=uuid.uuid4(),
+                text="text1",
+                score=1.0,
+            )
+        ]
+        image_chunks = [
+            ImageRetrievedChunk(
+                chunk_id=uuid.uuid4(),
+                document_id=uuid.uuid4(),
+                image_bytes=b"img",
+                page_number=1,
+                bbox=None,
+                score=1.0,
+            )
+        ]
+
+        merged = service._merge_results(text_chunks, image_chunks, 10)
+
+        assert len(merged) == 2
+        text_result = next(r for r in merged if hasattr(r, "text"))
+        assert text_result.score == pytest.approx(0.7)
+
+    def test_merge_empty_results(self):
+        """Handles empty results."""
+        from mywebui.core.rag import RAGService
+
+        service = RAGService.__new__(RAGService)
+        service.text_weight = 0.7
+        service.image_weight = 0.3
+
+        merged = service._merge_results([], [], 5)
+        assert merged == []
