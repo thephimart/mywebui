@@ -20,7 +20,7 @@ async def create_user(
     password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     user = User(
-        id=uuid.uuid4(),
+        id=str(uuid.uuid4()),
         username=username,
         password_hash=password_hash,
         role=role,
@@ -41,7 +41,7 @@ async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
+async def get_user_by_id(db: AsyncSession, user_id: str) -> User | None:
     """Get a user by ID."""
     result = await db.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
@@ -71,7 +71,7 @@ async def list_users(db: AsyncSession, skip: int = 0, limit: int = 100) -> list[
 
 async def update_user(
     db: AsyncSession,
-    user_id: uuid.UUID,
+    user_id: str,
     username: str | None = None,
     password: str | None = None,
     role: str | None = None,
@@ -101,7 +101,7 @@ async def update_user(
     return user
 
 
-async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> bool:
+async def delete_user(db: AsyncSession, user_id: str) -> bool:
     """Delete a user."""
     user = await get_user_by_id(db, user_id)
 

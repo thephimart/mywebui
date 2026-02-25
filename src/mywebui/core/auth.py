@@ -22,7 +22,7 @@ def _get_session_config() -> dict[str, Any]:
 
 async def create_session(
     db: AsyncSession,
-    user_id: uuid.UUID,
+    user_id: str,
     username: str,
 ) -> tuple[UserSession, str]:
     """Create a new session for a user."""
@@ -32,7 +32,7 @@ async def create_session(
     session_token = str(uuid.uuid4())
 
     session = UserSession(
-        session_id=uuid.uuid4(),
+        session_id=str(uuid.uuid4()),
         session_token=session_token,
         user_id=user_id,
         issued_at=now,
@@ -57,7 +57,7 @@ async def get_session_by_token(
         select(UserSession).where(
             and_(
                 UserSession.session_token == token,
-                UserSession.revoked == False,
+                UserSession.revoked.is_(False),
             )
         )
     )
@@ -91,7 +91,7 @@ async def refresh_session(
 
 async def revoke_session(
     db: AsyncSession,
-    session_id: uuid.UUID,
+    session_id: str,
 ) -> bool:
     """Revoke a session."""
     result = await db.execute(
@@ -110,14 +110,14 @@ async def revoke_session(
 
 async def revoke_all_user_sessions(
     db: AsyncSession,
-    user_id: uuid.UUID,
+    user_id: str,
 ) -> int:
     """Revoke all sessions for a user."""
     result = await db.execute(
         select(UserSession).where(
             and_(
                 UserSession.user_id == user_id,
-                UserSession.revoked == False,
+                UserSession.revoked.is_(False),
             )
         )
     )
@@ -135,7 +135,7 @@ async def revoke_all_user_sessions(
 
 async def list_user_sessions(
     db: AsyncSession,
-    user_id: uuid.UUID,
+    user_id: str,
     skip: int = 0,
     limit: int = 100,
 ) -> list[UserSession]:

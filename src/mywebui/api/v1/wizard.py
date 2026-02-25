@@ -63,7 +63,12 @@ async def create_admin_user(request: AdminCreateRequest):
     storage.init_storage()
     
     from mywebui.db import connection
+    from mywebui.db.models import Base
     from mywebui.core.users import create_user
+    
+    engine = connection.get_docs_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     
     factory = connection.get_docs_session_factory()
     async with factory() as db:
@@ -75,6 +80,6 @@ async def create_admin_user(request: AdminCreateRequest):
         )
     
     return AdminCreateResponse(
-        user_id=user.id,
+        user_id=str(user.id),
         username=user.username,
     )
