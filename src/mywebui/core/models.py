@@ -1,6 +1,5 @@
 """Model adapters for different LLM providers."""
 
-import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -13,6 +12,7 @@ from mywebui.config import get_config
 @dataclass
 class Message:
     """Chat message."""
+
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_call_id: str | None = None
@@ -22,6 +22,7 @@ class Message:
 @dataclass
 class ChatChoice:
     """Chat completion choice."""
+
     index: int
     message: Message
     finish_reason: str | None = None
@@ -30,6 +31,7 @@ class ChatChoice:
 @dataclass
 class ChatUsage:
     """Token usage information."""
+
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -38,6 +40,7 @@ class ChatUsage:
 @dataclass
 class ChatResult:
     """Chat completion result."""
+
     id: str
     choices: list[ChatChoice]
     usage: ChatUsage
@@ -47,6 +50,7 @@ class ChatResult:
 @dataclass
 class EmbeddingResult:
     """Embedding result."""
+
     embeddings: list[list[float]]
     model: str
 
@@ -159,10 +163,17 @@ class BaseEmbeddingModel(ABC):
 class OpenAICompatibleEmbeddingModel(BaseEmbeddingModel):
     """OpenAI-compatible embedding model."""
 
-    def __init__(self, url: str, model: str, api_key: str | None = None):
+    def __init__(
+        self,
+        url: str,
+        model: str,
+        api_key: str | None = None,
+        dimension: int | None = None,
+    ):
         self.url = url.rstrip("/")
         self.model = model
         self.api_key = api_key
+        self.dimension = dimension
         self._client: httpx.AsyncClient | None = None
 
     @property
@@ -209,13 +220,13 @@ def get_chat_model(role: str = "main") -> BaseChatModel:
     if role not in _chat_models:
         config = get_config()
         model_config = config.models.main if role == "main" else config.models.summarizer
-        
+
         _chat_models[role] = OpenAICompatibleChatModel(
             url=model_config.get("url", "http://localhost:11434"),
             model=model_config.get("model", "llama3"),
             api_key=model_config.get("api_key"),
         )
-    
+
     return _chat_models[role]
 
 
@@ -224,11 +235,12 @@ def get_embedding_model(role: str = "embedding") -> BaseEmbeddingModel:
     if role not in _embedding_models:
         config = get_config()
         model_config = config.models.embedding
-        
+
         _embedding_models[role] = OpenAICompatibleEmbeddingModel(
             url=model_config.get("url", "http://localhost:11434"),
             model=model_config.get("model", "nomic-embed-text"),
             api_key=model_config.get("api_key"),
+            dimension=config.rag.embedding_dimension,
         )
-    
+
     return _embedding_models[role]

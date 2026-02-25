@@ -47,6 +47,9 @@ htmlcov/
 *.swp
 *.swo
 
+# === Project specific ===
+rag_update.md
+
 # === OS junk ===
 .DS_Store
 Thumbs.db
