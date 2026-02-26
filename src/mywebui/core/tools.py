@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from mywebui.config import get_config
 
 
@@ -209,7 +211,6 @@ class WebFetchTool(BaseTool):
         url = kwargs["url"]
 
         try:
-            import httpx
             from bs4 import BeautifulSoup
 
             response = None
@@ -487,9 +488,7 @@ class ToolRegistry:
 
     def list_tools(self) -> list[dict[str, str]]:
         """List all available tools."""
-        return [
-            {"name": tool.name, "description": tool.description} for tool in self._tools.values()
-        ]
+        return [{"name": tool.name, "description": tool.description} for tool in self._tools.values()]
 
     async def execute(self, tool_name: str, **kwargs) -> ToolResult:
         """Execute a tool by name."""

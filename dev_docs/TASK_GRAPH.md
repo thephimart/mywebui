@@ -2,6 +2,18 @@
 
 ---
 
+## Philosophy: Freeze Scope, Finish Backend, Then Frontend
+
+**Short answer**: Freeze scope, finish the backend spine, then expose a clean contract for the frontend.
+
+**Long answer**:
+- Declare backend "structurally complete" (not feature-complete)
+- Data models stable, migration strategy exists, API shapes fixed
+- Side-effects (audit, auth, sessions) guaranteed
+- Alembic is the authoritative schema - no ad-hoc CREATE TABLE after this
+
+---
+
 ## Completed Status
 
 | Phase | Description | Status |
@@ -16,7 +28,7 @@
 | 3.5 | Mixed Text+Image Retrieval | ✅ Complete |
 | 4 | Authentication System | ✅ Complete |
 | 5 | Provider Configuration (llama-server) | ✅ Complete |
-| 6 | Tools Implementation | ✅ Complete |
+| 6.1 | Tools Implementation (filesystem, web) | ✅ Complete |
 
 **Test Results**: 84 tests passing (34 RAG + 30 PDF + 16 VL + 4 benchmarks)
 
@@ -61,10 +73,11 @@
 - **Config URL handling**: Removed /v1 suffix (provider adds it automatically)
 
 ### Tools Implementation
+- **filesystem**: Read files from allowed paths (/home/phil, /tmp)
 - **web_search**: DuckDuckGo search
 - **web_fetch**: URL fetching with BeautifulSoup, SSL fallback to system certs
 - **web_crawl**: crawl4ai with CrawlResultContainer handling
-- **filesystem**: Read files from allowed paths (/home/phil, /tmp)
+- **web_interact**: Playwright-based JS interaction (gated, admin-only)
 
 ### Chat API
 - **StreamRequest**: Added images field for base64 images
@@ -72,135 +85,156 @@
 
 ---
 
-## Phase 1: Foundation (Can be parallelized after storage)
+## Immediate Priority: Backend Spine (Must Finish First)
 
-```
-storage (05-storage)
-    │
-    ├──► migrations (Alembic)
-    │
-    └──► users_table (04-auth)
-              │
-              ├──► auth (04-auth)
-              │        │
-              │        └──► sessions (04-auth)
-              │
-              └──► audit (14-audit)
-```
+### Phase A1: Alembic Migrations (CRITICAL)
 
-## Phase 2: API Skeleton (Depends on: auth)
+**Goal**: Make Alembic the authoritative schema. No ad-hoc schema changes after this.
 
-```
-auth (04-auth)
-    │
-    ├──► API routes (16-apis)
-    │        │
-    │        ├──► /api/v1/auth/*
-    │        ├──► /api/v1/sessions/*
-    │        ├──► /api/v1/users/* (admin)
-    │        ├──► /api/v1/audit/* (admin)
-    │        └──► /api/v1/wizard/*
-    │
-    └──► WebSocket protocol (16-apis)
-```
+**Status**: Migration files exist but not integrated as authoritative source.
 
-## Phase 3: Core Features (Depends on: API skeleton)
+**Tasks**:
+- [ ] Integrate Alembic as sole authority for schema evolution
+- [ ] Baseline current schema into migrations
+- [ ] One migration per logical table group (docs, users, audit)
+- [ ] Lock DB schema - no CREATE TABLE after this point
+- [ ] Add embedding_model_id, dim, modality tracking to schema
+- [ ] Enforce compatibility at query time
+- [ ] Make re-embedding an explicit migration path
 
-```
-API skeleton
-    │
-    ├──► chat (16-apis)
-    │        │
-    │        └──► agent orchestrator
-    │                 │
-    │                 ├──► tools (09-tools)
-    │                 │
-    │                 └──► models (08-models)
-    │
-    ├──► docs (16-apis)
-    │        │
-    │        └──► rag (06-rag)
-    │                 │
-    │                 └──► retrieval (11-retrieval)
-    │
-    ├──► attachments (16-apis)
-    │        │
-    │        └──► ingestion (10-attachments)
-    │
-    └──► config (16-apis)
-```
-
-## Phase 4: Integrations (Depends on: core features)
-
-```
-core features
-    │
-    ├──► comfyui (12-comfyui)
-    │
-    └──► webui (13-webui)
-```
+**Why?** Without Alembic:
+- Every schema tweak = silent breakage
+- Embedding model changes = undefined DB state
+- Frontend work becomes guessy and fragile
 
 ---
 
-## Execution Order (Boring Spine First)
+### Phase A2: Stub Missing APIs
 
-| Step | Task | Dependencies | Can Parallelize With |
-|------|------|--------------|---------------------|
-| 1 | Storage layout + migrations | - | - |
-| 2 | Users table | storage | - |
-| 3 | Auth (login/logout) | users | - |
-| 4 | Sessions | auth | - |
-| 5 | Audit logging | auth | - |
-| 6 | API routes skeleton | auth | - |
-| 7 | WebSocket plumbing | auth | - |
-| 8 | Chat endpoint | API skeleton | tools, docs |
-| 9 | Tools system | chat | docs |
-| 10 | Models/Agents | tools | chat |
-| 11 | Docs + RAG | API skeleton | chat |
-| 12 | Retrieval | docs | - |
-| 13 | Attachments + ingestion | API skeleton | docs |
-| 14 | Config management | API skeleton | - |
-| 15 | ComfyUI integration | core features | - |
-| 16 | WebUI | core features | - |
+**Goal**: Return 501 Not Implemented with audit events for intentionally unsupported features.
+
+**Tasks**:
+- [ ] Stub exec_python - return 501, log audit event
+- [ ] Stub exec_shell - return 501, log audit event
+- [ ] Stub Attachment ingestion API - return 501 for internals, provide upload endpoint contract
+- [ ] Document what is intentionally unsupported
+
+**Rationale**: Frontend needs to know what states exist and what is intentionally unsupported.
 
 ---
 
-## Key Dependencies Summary
+### Phase A3: Wizard Flow
 
-```
-storage → users → auth → sessions → audit → API → chat → tools → models
-                                            ↓
-                                           docs → retrieval
-                                            ↓
-                                         attachments
-                                            ↓
-                                          config
-                                            ↓
-                                           comfyui
-                                             ↓
-                                            webui
-```
+**Goal**: First-run setup for admin account and system configuration.
+
+**Tasks**:
+- [ ] Implement `/api/wizard/status` endpoint
+- [ ] Implement `/api/wizard/complete` endpoint
+- [ ] Add existing data detection (reuse/backup/abort)
 
 ---
 
-## Future Tasks
+### Phase A4: Full Audit Event Coverage (At Minimum Stubs)
 
-### Phase 7: Ollama Provider (Optional)
+**Goal**: Complete audit logging for all security-relevant events.
+
+**Tasks**:
+- [ ] Stub `tool_command` event (even if shallow)
+- [ ] Stub `doc_ingest` / `doc_delete` events
+- [ ] Stub `acl_change` event
+- [ ] Stub `model_config_change` event
+- [ ] Stub `session_compaction` event
+- [ ] Stub `attachment_upload` event
+- [ ] Stub `session_revoke` event
+
+---
+
+### Phase A5: FRONTEND_CONTRACT.md
+
+**Goal**: Produce exhaustive contract document for frontend developers.
+
+**Status**: New document to create after backend spine is complete.
+
+**Contents**:
+- Routes (all endpoints)
+- Request/response schemas
+- Streaming semantics
+- Error codes
+- Auth requirements
+- Capability flags (what's enabled/disabled)
+
+---
+
+## Future Tasks (After Backend Spine)
+
+### Phase B1: Ollama Provider (Optional)
 
 **Goal**: Complete ollama provider implementation.
+
+**Status**: ProviderType enum exists, adapters not implemented.
 
 **Tasks**:
 - [ ] Implement OllamaChatModel for local ollama endpoints
 - [ ] Implement OllamaEmbeddingModel for ollama embeddings
 - [ ] Test with local ollama installation
 
-**Notes**: Currently only llama-server provider is implemented. Ollama can be added for users who prefer that interface.
+---
+
+### Phase B2: Attachment Processing
+
+**Goal**: Full document ingestion pipeline (images, audio, video).
+
+**Tasks**:
+- [ ] Implement OCR (rapidocr) for image text extraction
+- [ ] Implement STT (faster-whisper) for audio transcription
+- [ ] Implement video processing (ffmpeg) with audio extraction
+- [ ] Implement TTS (Kokoro) for text-to-speech
+- [ ] Implement thumbnail generation (256px)
+- [ ] Wire attachments to document ingestion
 
 ---
 
-### Phase 8: UI & Frontend (Future)
+### Phase B3: Per-user Profile Settings
+
+**Goal**: User-specific preferences and settings.
+
+**Tasks**:
+- [ ] Implement per-user `profile.yaml` storage
+- [ ] Add profile API endpoints (/api/v1/users/{id}/profile)
+- [ ] Add theme, default_model, preferences support
+
+---
+
+### Phase B4: Session Compaction
+
+**Goal**: Compress old session messages into summaries.
+
+**Triggers**: Manual, token limit, size threshold
+
+**Tasks**:
+- [ ] Implement compaction workflow
+- [ ] Add summary generation via summarizer model
+- [ ] Archive raw messages after summarization
+
+---
+
+### Phase B5: ComfyUI Workflow Execution
+
+**Goal**: Complete integration with ComfyUI for image generation.
+
+**Tasks**:
+- [ ] Implement workflow definition storage
+- [ ] Implement job queue and execution
+- [ ] Add input validation against schema
+- [ ] Enforce limits (steps, resolution, seeds)
+
+---
+
+### Phase C: Frontend UI
 
 **Goal**: Build the web UI for the application.
+
+**Status**: Backend APIs exist, frontend not started. Wait for FRONTEND_CONTRACT.md.
 
 **Tasks**:
 - [ ] Create React/Next.js frontend
@@ -211,7 +245,7 @@ storage → users → auth → sessions → audit → API → chat → tools →
 
 ---
 
-### Phase 3.6: Cross-Modal Similarity (Optional Enhancement)
+### Phase D1: Cross-Modal Similarity (Optional Enhancement)
 
 **Goal**: Enable meaningful cross-modality similarity scoring.
 
@@ -224,7 +258,7 @@ storage → users → auth → sessions → audit → API → chat → tools →
 
 ---
 
-### Phase 4: Storage Layer Optimization
+### Phase D2: Storage Layer Optimization
 
 **Goal**: Separate text and image vector storage with hybrid ANN indexes.
 
@@ -236,7 +270,7 @@ storage → users → auth → sessions → audit → API → chat → tools →
 
 ---
 
-### Phase 5: UI & Explainability
+### Phase D3: UI & Explainability
 
 **Goal**: Surface multimodal results with citations and explanations.
 
@@ -257,6 +291,7 @@ storage → users → auth → sessions → audit → API → chat → tools →
 | YAML stubs missing | Low | `types-PyYAML` optional |
 | SQLite UUID binding | Low | Convert UUIDs to strings before DB operations |
 | SSL certificate issues | Low | Use system certs fallback (/usr/lib/ssl/cert.pem) |
+| Alembic not authoritative | Critical | Must fix before frontend work |
 
 ---
 
@@ -272,3 +307,58 @@ storage → users → auth → sessions → audit → API → chat → tools →
 | Session-based auth with httponly cookies | Expose secrets in logs |
 | ACL-first data filtering | Cross-user data leakage |
 | Audit all tool executions | Skip audit logging |
+| Alembic as schema authority | Ad-hoc CREATE TABLE |
+| Freeze scope before frontend | Add new features |
+| Migration + contract update in same PR | Schema snuck in through side door |
+
+---
+
+## PR Workflow (Enforced)
+
+**Rule**: Any new persistent data requires a migration + FRONTEND_CONTRACT.md update in the same PR.
+
+**Why**:
+- Preuck in through avents "schema sn side door"
+- Keeps FRONTEND_CONTRACT.md authoritative
+- Forces thinking in terms of interfaces, not tables
+
+**Practical execution**:
+- A1 PR: Alembic init, baseline migration, remove runtime schema creation
+- A2 PR: exec_python/exec_shell return 501, audit event fired
+- A3 PR: Wizard endpoints, no UI, just state transitions
+- A4 PR: Enumerate audit events, fire stubs
+- A5 PR: FRONTEND_CONTRACT.md as deliverable (not notes)
+
+**After A5**: Frontend becomes obvious.
+
+---
+
+## Execution Order (Recommended)
+
+| Step | Task | Priority |
+|------|------|----------|
+| 1 | Alembic migrations as authoritative schema | 🔴 CRITICAL |
+| 2 | Stub exec_python/exec_shell (501 + audit) | 🔴 CRITICAL |
+| 3 | Stub attachment API | 🔴 CRITICAL |
+| 4 | Wizard flow endpoints | 🔴 CRITICAL |
+| 5 | Audit event stubs | 🔴 CRITICAL |
+| 6 | Write FRONTEND_CONTRACT.md | 🟡 BLOCKS FRONTEND |
+| 7 | Ollama provider (optional) | 🟢 Optional |
+| 8 | Attachment processing | 🟢 Future |
+| 9 | Profile settings | 🟢 Future |
+| 10 | Session compaction | 🟢 Future |
+| 11 | ComfyUI execution | 🟢 Future |
+| 12 | Frontend UI | 🟢 After contract |
+
+---
+
+## Key Insight
+
+> This is not a half-built backend — this is a serious system that's one discipline step away from being "attachable."
+
+The hard part is done:
+- Clear dependency graph
+- No magical coupling
+- No premature UI-driven compromises
+
+Now it's time to formalize, not expand.
