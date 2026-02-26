@@ -14,9 +14,25 @@ No hidden execution.
 
 ## Status
 
-🚧 **Alpha**
+🚧 **Alpha** — Backend APIs complete, frontend pending.
 
-APIs, architecture, and data models are evolving.
+**Current phase**: Freezing scope, finishing backend spine.
+- Backend is **structurally complete** (not feature-complete)
+- APIs stable, data models stable
+- Next: Alembic migrations as authoritative schema, then FRONTEND_CONTRACT.md
+
+---
+
+## Philosophy
+
+**Short answer**: Freeze scope, finish the backend spine, then expose a clean contract for the frontend.
+
+**Long answer**:
+- Declare backend "structurally complete" (not feature-complete)
+- Data models stable, migration strategy exists, API shapes fixed
+- Side-effects (audit, auth, sessions) guaranteed
+- Alembic is the authoritative schema — no ad-hoc CREATE TABLE after this
+- Any new persistent data requires migration + contract update in the same PR
 
 ---
 
@@ -57,13 +73,58 @@ If something happens, you can see *who*, *when*, and *why*.
 
 ## Architecture (high level)
 
-- Web UI (local)
-- Python backend (FastAPI)
-- Agent runtime with tool orchestration
-- SQLite-based storage (docs, vectors, history, audit)
-- Local model endpoints (configurable)
+- Python backend (FastAPI) — **complete**
+- Agent runtime with tool orchestration — **complete**
+- SQLite-based storage (docs, vectors, history, audit) — **complete**
+- Local model endpoints (configurable) — **complete**
+- Web UI (local) — **pending**
 
 All components communicate via **explicit JSON APIs**.
+
+---
+
+## Implemented Features
+
+### RAG & Retrieval
+- Token-aware chunking (512 tokens, 96 overlap)
+- MMR re-ranking with configurable λ
+- Multimodal retrieval (text, image, hybrid)
+- PDF text and image extraction
+
+### Authentication & Security
+- Session-based auth with HTTP-only cookies
+- Per-user SQLite databases
+- Audit logging for all tool executions
+- ACL-first data filtering
+
+### Tools
+- `filesystem` — Read files from allowed paths
+- `web_search` — DuckDuckGo search
+- `web_fetch` — URL fetching with BeautifulSoup
+- `web_crawl` — crawl4ai web crawling
+- `web_interact` — Playwright JS interaction (admin-only)
+
+### Model Providers
+- OpenAI-compatible (Ollama, LM Studio, vLLM, OpenRouter)
+- Llama-server with multimodal support
+
+---
+
+## What's Pending
+
+### Before Frontend
+1. **Alembic migrations** — Make schema authoritative
+2. **Stub missing APIs** — exec_python, exec_shell return 501
+3. **Wizard flow** — First-run setup endpoints
+4. **Audit coverage** — Complete event stubs
+5. **FRONTEND_CONTRACT.md** — Exhaustive API contract
+
+### Future Features
+- Ollama provider (optional)
+- Attachment processing (OCR, STT, TTS, thumbnails)
+- Per-user profile settings
+- Session compaction
+- ComfyUI workflow execution
 
 ---
 
@@ -71,7 +132,7 @@ All components communicate via **explicit JSON APIs**.
 
 The complete, authoritative system design lives in:
 
-- `docs/` (see `docs/README.md` for the index)
+- `dev_docs/` (see `dev_docs/README.md` for the index)
 
 This directory contains:
 - security model
@@ -79,6 +140,8 @@ This directory contains:
 - storage layout
 - RAG and ACL invariants
 - tool execution constraints
+- API specifications
+- Task graph with execution order
 
 The README intentionally stays minimal.
 
