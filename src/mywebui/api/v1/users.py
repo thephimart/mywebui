@@ -1,6 +1,5 @@
 """Users API routes."""
 
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,11 +22,21 @@ async def get_current_user(request: Request) -> UserResponse:
             detail="Not authenticated",
         )
 
+    factory = connection.get_docs_session_factory()
+    async with factory() as db:
+        user = await users_service.get_user_by_id(db, request.state.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+            )
+
     return UserResponse(
-        id=request.state.user_id,
-        username=request.state.username,
-        role=request.state.role,
-        is_active=True,
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
     )
 
 
@@ -66,13 +75,13 @@ async def list_users(
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
-    user_id: uuid.UUID,
+    user_id: str,
     request: Request,
     db: AsyncSession = Depends(connection.get_docs_db),
     admin: UserResponse = Depends(require_admin),
 ):
     """Get a user by ID (admin only)."""
-    user = await users_service.get_user_by_id(db, user_id)
+    user = await users_service.get_user_by_id(db, str(user_id))
 
     if user is None:
         raise HTTPException(
@@ -91,7 +100,7 @@ async def get_user(
 
 @router.patch("/{user_id}", response_model=UserResponse)
 async def update_user(
-    user_id: uuid.UUID,
+    user_id: str,
     request: UserUpdate,
     request_state: Request,
     db: AsyncSession = Depends(connection.get_docs_db),
@@ -100,7 +109,7 @@ async def update_user(
     """Update a user (admin only)."""
     user = await users_service.update_user(
         db,
-        user_id,
+        str(user_id),
         username=request.username,
         password=request.password,
         role=request.role.value if request.role else None,
@@ -124,13 +133,13 @@ async def update_user(
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: uuid.UUID,
+    user_id: str,
     request: Request,
     db: AsyncSession = Depends(connection.get_docs_db),
     admin: UserResponse = Depends(require_admin),
 ):
     """Delete a user (admin only)."""
-    success = await users_service.delete_user(db, user_id)
+    success = await users_service.delete_user(db, str(user_id))
 
     if not success:
         raise HTTPException(

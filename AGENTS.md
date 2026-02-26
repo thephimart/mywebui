@@ -2,80 +2,42 @@
 
 ## Project Overview
 
-- **Project**: mywebui - Local-first Web UI for AI and automation workloads
-- **Language**: Python 3.12+ (pure Python backend)
-- **Framework**: FastAPI
-- **Database**: SQLite with sqlite-vec for vectors
-- **Status**: Alpha - APIs and architecture are evolving
-
-The authoritative system design is in `docs/`. All agent implementations must follow the security model, data ownership rules, and ACL invariants defined there.
+- **Language**: Python 3.12+ | **Framework**: FastAPI | **Database**: SQLite (user-specific)
+- **Status**: Alpha - APIs evolving
+- **Trust Boundary**: Runs inside WSL - no host access
 
 ---
 
 ## Build, Lint, and Test Commands
 
-### Development Setup
-
+### Setup
 ```bash
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# or .venv\Scripts\activate on Windows
-
-# Install dependencies
+source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
 ### Running the Application
-
 ```bash
-# Run development server
-python -m mywebui
-
-# Or via uvicorn
-uvicorn mywebui.main:app --reload
+source .venv/bin/activate
+uvicorn mywebui.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 600
 ```
+**Note**: `--timeout-keep-alive 600` is required for long-running LLM requests.
 
 ### Linting & Type Checking
-
 ```bash
-# Run ruff linter
 ruff check .
-
-# Run ruff with auto-fix
 ruff check --fix .
-
-# Run mypy type checker
 mypy .
 ```
 
 ### Testing
-
 ```bash
-# Run all tests
-pytest
-
-# Run a single test file
-pytest tests/test_auth.py
-
-# Run a single test function
-pytest tests/test_auth.py::test_login_success
-
-# Run tests matching a pattern
-pytest -k "test_login"
-
-# Run with coverage
-pytest --cov=mywebui --cov-report=html
-```
-
-### Building
-
-```bash
-# Build package
-python -m build
-
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
+pytest                                    # all tests
+pytest tests/test_auth.py                 # single file
+pytest tests/test_auth.py::test_login     # single function
+pytest -k "test_login"                   # pattern match
+pytest --cov=mywebui --cov-report=html    # with coverage
 ```
 
 ---
@@ -83,16 +45,14 @@ pip install -e ".[dev]"
 ## Code Style Guidelines
 
 ### General Principles
-
-- Follow **PEP 8** with **Black** formatting (line length: 100)
-- Use **type hints** everywhere - this is a strict requirement
-- Keep functions small and focused (max ~50 lines)
+- Follow **PEP 8** with **Ruff** (line length: 130)
+- **Type hints required everywhere** - this is a strict requirement
+- Keep functions small (~50 lines max)
 - Write docstrings for all public modules, classes, and functions
 
-### Imports
-
+### Imports (sorted by ruff)
 ```python
-# Standard library first, then third-party, then local
+# stdlib → third-party → local
 import json
 from pathlib import Path
 from typing import Any
@@ -100,76 +60,71 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from mywebui.auth import get_current_user
-from mywebui.models import User
+from mywebui.db import connection
+from mywebui.schemas.api import LoginRequest
 ```
 
-- Use absolute imports (not relative `..`)
-- Sort imports with `ruff check --select=I --fix`
-- Group: stdlib → third-party → local, with blank lines between groups
-
 ### Naming Conventions
-
 | Element | Convention | Example |
 |---------|------------|---------|
-| Modules | `snake_case` | `auth_service.py` |
-| Classes | `PascalCase` | `UserService` |
-| Functions | `snake_case` | `get_current_user` |
-| Constants | `UPPER_SNAKE_CASE` | `MAX_TOKEN_LIMIT` |
-| Variables | `snake_case` | `session_token` |
-| Private members | `_leading_underscore` | `_internal_cache` |
+| Modules | snake_case | `auth_service.py` |
+| Classes | PascalCase | `UserService` |
+| Functions | snake_case | `get_current_user` |
+| Constants | UPPER_SNAKE_CASE | `MAX_TOKEN_LIMIT` |
+| Variables | snake_case | `session_token` |
+| Private | _leading_underscore | `_internal_cache` |
 
 ### Type Hints
-
 ```python
-# Always use explicit types
-def process_message(message: str, user_id: int) -> dict[str, Any]:
-    ...
+def process_message(message: str, user_id: int) -> dict[str, Any]: ...
+def get_optional_value() -> str | None: ...
 
-# Use Optional for nullable types
-def get_optional_value() -> str | None:
-    ...
-
-# Use TypeVar for generics
-T = TypeVar("T")
-
-# Pydantic models for all data transfer objects
+# Pydantic for DTOs
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8)
 ```
 
-### Error Handling
-
+### Dataclasses for Internal Data Structures
 ```python
-# Use custom exception classes
+from dataclasses import dataclass
+from typing import Literal, Any
+
+@dataclass
+class MessageContentPart:
+    type: Literal["text", "image_url"]
+    text: str | None = None
+    image_url: dict[str, Any] | None = None
+```
+
+### Error Handling
+```python
+# Custom exceptions for business logic
 class MyWebUIException(Exception):
-    """Base exception for mywebui."""
     def __init__(self, message: str, code: str = "INTERNAL_ERROR"):
         self.message = message
         self.code = code
         super().__init__(message)
 
-# Handle gracefully with appropriate HTTP exceptions
-from fastapi import HTTPException
-
-@app.get("/items/{item_id}")
-async def get_item(item_id: int) -> Item:
-    item = await db.get_item(item_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return item
+# HTTP exceptions for API errors
+from fastapi import HTTPException, status
+raise HTTPException(status_code=404, detail="Item not found")
 ```
 
-### Database & ORM
+---
 
-- Use **SQLAlchemy 2.0** with async support
-- Always define models with explicit types
-- Use migrations (Alembic) for schema changes
-- Never hardcode SQL - use the ORM
+## Security Requirements
 
-### API Design
+- **Never expose secrets** in logs or responses
+- **Hash passwords** with bcrypt
+- **Validate all inputs** with Pydantic models
+- **ACL-first**: Filter data by ownership before retrieval/embedding
+- **Audit logging**: Log all tool executions
+- **No cross-user data leakage**
 
+---
+
+## API Design Pattern
 ```python
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -180,26 +135,23 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
 @router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(request: LoginRequest) -> LoginResponse:
     ...
 ```
 
-### Security Requirements (From docs/)
+---
 
-- **Never expose secrets in logs or responses**
-- **Always hash passwords** with salt (use bcrypt or argon2)
-- **Validate all inputs** with Pydantic models
-- **Enforce ACL filtering** before any data access
-- **Log all tool executions** for auditability
-- **No cross-user data leakage** - each user's data is isolated
+## Database & ORM
 
-### Testing Guidelines
+- Use **SQLAlchemy 2.0** with async support
+- Always define models with explicit types
+- Use migrations (Alembic) for schema changes
+- **SQLite UUID handling**: Convert UUIDs to strings before DB operations
 
+---
+
+## Testing Guidelines
 ```python
 import pytest
 from fastapi.testclient import TestClient
@@ -210,54 +162,21 @@ def client():
     return TestClient(app)
 
 def test_login_success(client):
-    response = client.post("/api/auth/login", json={
-        "username": "test",
-        "password": "password123"
-    })
+    response = client.post("/api/auth/login", json={"username": "test", "password": "password123"})
     assert response.status_code == 200
     assert "access_token" in response.json()
 ```
 
-- Use **pytest** with async support (**pytest-asyncio**)
-- Write descriptive test names: `test_<method>_<expected_behavior>`
-- Use fixtures for common setup
-- Mock external services (LLM endpoints, file system)
-- Aim for meaningful test coverage on critical paths
-
-### Documentation
-
-- Docstrings: **Google style** or **NumPy style**
-- Example:
-```python
-def authenticate_user(username: str, password: str) -> User | None:
-    """Authenticate a user by username and password.
-
-    Args:
-        username: The user's username.
-        password: The user's plaintext password.
-
-    Returns:
-        The authenticated User object, or None if authentication fails.
-
-    Raises:
-        AuthenticationError: If the credentials are invalid.
-    """
-```
-
-### Git Conventions
-
-- Commit messages: Imperative mood, 50 chars max for title
-- Branches: `feature/description` or `fix/description`
-- PRs: Include description of changes and link to issues
+- Use **pytest** with **pytest-asyncio**
+- Test names: `test_<method>_<expected_behavior>`
+- Mock external services (LLM endpoints)
 
 ---
 
 ## Architecture Constraints
 
-Per the docs in `docs/`, agents must respect:
-
-1. **Trust Boundary**: Runs inside hardened WSL - no host access
-2. **ACL-first**: Filter data by ACL *before* retrieval/embedding
+1. **Trust Boundary**: Runs inside WSL - no host access
+2. **ACL-first**: Filter data by ACL before retrieval
 3. **One tool call per turn**: No recursive tool execution
 4. **Explicit ownership**: Every record has a clear owner
 5. **Audit logging**: All tool executions must be logged
@@ -268,26 +187,81 @@ Per the docs in `docs/`, agents must respect:
 ## File Organization
 
 ```
-mywebui/
-├── src/mywebui/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app entry point
-│   ├── api/                 # API route handlers
-│   │   └── v1/
-│   │       ├── auth.py
-│   │       ├── chat.py
-│   │       └── ...
-│   ├── core/                # Core business logic
-│   │   ├── auth.py
-│   │   ├── agents.py
-│   │   └── tools.py
-│   ├── db/                  # Database models
-│   │ & connection   ├── models.py
-│   │   └── connection.py
-│   └── schemas/             # Pydantic schemas
-├── tests/
-│   ├── conftest.py
-│   └── test_*.py
-├── pyproject.toml
-└── README.md
+src/mywebui/
+├── __init__.py
+├── main.py              # FastAPI entry point
+├── config.py            # Config, ProviderType, ModelConfig
+├── api/v1/              # Route handlers
+│   ├── auth.py          # Login, logout, session
+│   ├── chat.py          # Chat endpoint with multimodal
+│   ├── users.py         # User management
+│   ├── documents.py     # Document CRUD
+│   ├── audit.py         # Audit logs
+│   └── docs.py          # Document retrieval
+├── core/                # Business logic
+│   ├── auth.py          # Auth service
+│   ├── models.py        # LLM model adapters (LlamaServer*)
+│   ├── agents.py        # Agent orchestration
+│   ├── rag.py           # Chunking, retrieval, MMR
+│   ├── pdf.py           # PDF extraction
+│   └── tools.py         # web_search, web_fetch, web_crawl, filesystem
+├── db/                  # Database
+│   ├── models.py        # SQLAlchemy models
+│   ├── connection.py    # DB connection
+│   └── user_models.py  # User-specific models
+├── middleware.py        # Session middleware
+└── schemas/             # Pydantic schemas
 ```
+
+---
+
+## Key Technical Notes
+
+- **Config URLs**: Don't include `/v1` suffix (provider adds it automatically)
+- **Datetime**: Use `datetime.now(timezone.utc)` not `datetime.utcnow()` for cookies
+- **LlamaServer**: Uses native `/embedding` endpoint, multimodal with content arrays
+- **SSL fallback**: `/usr/lib/ssl/cert.pem` if certifi fails
+- **SQLite**: User databases are per-user SQLite files
+
+---
+
+## Database & Alembic Migrations
+
+### Two Separate Alembic Environments
+
+The project uses two independent Alembic environments:
+
+```
+alembic_docs/          # Docs database (shared)
+├── env.py
+├── versions/
+│   └── 001_initial.py
+└── alembic_docs.ini
+
+alembic_users/        # User history databases (per-user)
+├── env.py
+├── versions/
+│   └── 001_initial.py
+└── alembic_users.ini
+```
+
+### Running Migrations Manually
+
+```bash
+# Docs database
+alembic -c alembic_docs.ini upgrade head
+alembic -c alembic_docs.ini stamp head
+
+# User database
+alembic -c alembic_users.ini upgrade head
+alembic -c alembic_users.ini stamp head
+```
+
+### Programmatic Usage
+
+Database initialization happens automatically at startup via `connection.init_docs_db()` and `connection.init_user_db(username)`. These functions:
+1. Check if DB exists
+2. If new: create tables with `Base.metadata.create_all()`, then stamp with Alembic
+3. If exists: run Alembic upgrades
+
+Never call `Base.metadata.create_all()` on existing databases - it causes schema drift.

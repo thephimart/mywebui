@@ -595,7 +595,7 @@ class RAGService:
     ) -> Document:
         """Ingest a document and create chunks."""
         doc = Document(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             owner_id=owner_id,
             title=title,
             visibility=visibility,
@@ -609,7 +609,7 @@ class RAGService:
 
         for i, chunk_text in enumerate(chunks):
             chunk = Chunk(
-                id=uuid.uuid4(),
+                id=str(uuid.uuid4()),
                 document_id=doc.id,
                 modality=modality,
                 text=chunk_text,
@@ -622,7 +622,7 @@ class RAGService:
             if modality == "text" and chunk_text.strip():
                 embedding_result = await self.embedding_model.embed([chunk_text])
                 embedding = Embedding(
-                    id=uuid.uuid4(),
+                    id=str(uuid.uuid4()),
                     chunk_id=chunk.id,
                     model_name="default",
                     modality="text",

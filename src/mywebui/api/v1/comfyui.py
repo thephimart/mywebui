@@ -1,7 +1,6 @@
 """ComfyUI API routes for workflow execution."""
 
 import uuid
-from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -39,7 +38,7 @@ async def get_current_user(request: Request) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    
+
     return {
         "user_id": request.state.user_id,
         "username": request.state.username,
@@ -67,15 +66,15 @@ async def run_workflow(
 ):
     """Run a ComfyUI workflow."""
     config = get_config()
-    
+
     if config.comfyui.mode != "local":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="ComfyUI is not enabled",
         )
-    
+
     comfyui_url = config.comfyui.url
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -86,21 +85,21 @@ async def run_workflow(
                 },
                 timeout=30.0,
             )
-            
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"ComfyUI error: {response.text}",
                 )
-            
+
             data = response.json()
             prompt_id = data.get("prompt_id")
-            
+
             return WorkflowRunResponse(
                 job_id=uuid.UUID(prompt_id) if prompt_id else uuid.uuid4(),
                 status="queued",
             )
-    
+
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -115,22 +114,22 @@ async def get_workflow_status(
 ):
     """Get workflow status."""
     config = get_config()
-    
+
     if config.comfyui.mode != "local":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="ComfyUI is not enabled",
         )
-    
+
     comfyui_url = config.comfyui.url
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{comfyui_url}/history/{job_id}",
                 timeout=10.0,
             )
-            
+
             if response.status_code == 404:
                 return WorkflowStatusResponse(
                     job_id=job_id,
@@ -138,23 +137,23 @@ async def get_workflow_status(
                     progress=None,
                     output=None,
                 )
-            
+
             data = response.json()
             job_data = data.get(str(job_id), {})
-            
+
             status_value = "running"
             if job_data.get("outputs"):
                 status_value = "completed"
             elif job_data.get("status"):
                 status_value = "running"
-            
+
             return WorkflowStatusResponse(
                 job_id=job_id,
                 status=status_value,
                 progress=job_data.get("status", {}).get("exec_info", {}).get("progress"),
                 output=job_data.get("outputs"),
             )
-    
+
     except httpx.RequestError:
         return WorkflowStatusResponse(
             job_id=job_id,

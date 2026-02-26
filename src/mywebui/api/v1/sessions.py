@@ -1,7 +1,5 @@
 """Sessions API routes."""
 
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from mywebui.core import auth as auth_service
@@ -64,7 +62,7 @@ async def list_sessions(
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_session(
-    session_id: uuid.UUID,
+    session_id: str,
     request: Request,
     current: dict = Depends(get_current_user),
 ):

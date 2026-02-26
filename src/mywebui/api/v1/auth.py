@@ -1,6 +1,6 @@
 """Authentication API routes."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -113,6 +113,8 @@ async def login(
             detail="Invalid credentials",
         )
 
+    connection.get_user_engine(user.username)
+
     factory = connection.get_user_session_factory(user.username)
     async with factory() as udb:
         session, token = await auth_service.create_session(udb, user.id, user.username)
@@ -122,7 +124,7 @@ async def login(
         value=token,
         httponly=True,
         samesite="lax",
-        expires=session.expires_at,
+        expires=session.expires_at.replace(tzinfo=UTC),
     )
 
     return LoginResponse(

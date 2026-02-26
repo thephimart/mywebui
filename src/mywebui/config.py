@@ -1,11 +1,30 @@
 """Configuration management."""
 
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+
+
+class ProviderType(StrEnum):
+    """Model provider types."""
+
+    OPENAI_COMPATIBLE = "openai-compatible"
+    LLAMA_SERVER = "llama-server"
+    OLLAMA = "ollama"
+
+
+class ModelConfig(BaseModel):
+    """Individual model configuration."""
+
+    provider: str = "openai-compatible"
+    url: str = ""
+    model: str = ""
+    api_key: str | None = None
 
 
 class ServerConfig(BaseModel):
@@ -25,11 +44,11 @@ class SecurityConfig(BaseModel):
 class ModelsConfig(BaseModel):
     """Models configuration."""
 
-    main: dict = {}
-    summarizer: dict = {}
-    embedding: dict = {}
-    image_embedding: dict = {}
-    tts: dict = {}
+    main: ModelConfig = ModelConfig()
+    summarizer: ModelConfig = ModelConfig()
+    embedding: ModelConfig = ModelConfig()
+    image_embedding: ModelConfig = ModelConfig()
+    tts: ModelConfig = ModelConfig()
 
 
 class ToolsConfig(BaseModel):
@@ -110,8 +129,23 @@ def get_config() -> Config:
         with open(config_path) as f:
             data = yaml.safe_load(f)
             if data:
-                for key, value in data.items():
-                    if hasattr(config, key):
-                        setattr(config, key, value)
+                _merge_config(config, data)
 
     return config
+
+
+def _merge_config(config: Config, data: dict[str, Any]) -> None:
+    """Merge YAML data into config, properly instantiating nested models."""
+    for key, value in data.items():
+        if not hasattr(config, key):
+            continue
+
+        attr = getattr(config, key)
+        if hasattr(attr, "model_dump") and isinstance(value, dict):
+            merged = {**attr.model_dump(), **value}
+            if hasattr(attr, "model_validate"):
+                setattr(config, key, attr.model_validate(merged))
+            else:
+                setattr(config, key, type(attr)(**merged))
+        else:
+            setattr(config, key, value)

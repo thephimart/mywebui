@@ -1,7 +1,7 @@
 """Authentication service with session management."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, select
@@ -27,7 +27,8 @@ async def create_session(
 ) -> tuple[UserSession, str]:
     """Create a new session for a user."""
     config = _get_session_config()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
+    expires = now + timedelta(hours=config["rolling_ttl_hours"])
 
     session_token = str(uuid.uuid4())
 
@@ -35,10 +36,10 @@ async def create_session(
         session_id=str(uuid.uuid4()),
         session_token=session_token,
         user_id=user_id,
-        issued_at=now,
-        expires_at=now + timedelta(hours=config["rolling_ttl_hours"]),
+        issued_at=now.replace(tzinfo=None),
+        expires_at=expires.replace(tzinfo=None),
         revoked=False,
-        last_activity=now,
+        last_activity=now.replace(tzinfo=None),
     )
 
     db.add(session)

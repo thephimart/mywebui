@@ -33,7 +33,7 @@ def check_api_routes() -> bool:
     for route_file in routes_path.glob("*.py"):
         if route_file.name.startswith("_"):
             continue
-        content = route_file.read_text()
+        route_file.read_text()
         found_routes.add(route_file.stem)
 
     undocumented = found_routes - {r[1] for r in documented_routes}

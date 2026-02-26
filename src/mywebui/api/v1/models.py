@@ -1,7 +1,5 @@
 """Models API routes for model management."""
 
-import uuid
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -40,7 +38,7 @@ async def get_current_user(request: Request) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    
+
     return {
         "user_id": request.state.user_id,
         "username": request.state.username,
@@ -67,7 +65,7 @@ async def list_models(
 ):
     """List configured models (admin only)."""
     config = get_config()
-    
+
     return {
         "models": {
             "main": config.models.main,
@@ -85,12 +83,13 @@ async def test_model(
     current: dict = Depends(require_admin),
 ):
     """Test a model connection (admin only)."""
-    import httpx
     import time
-    
+
+    import httpx
+
     try:
         start = time.time()
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{request.url}/v1/chat/completions",
@@ -102,9 +101,9 @@ async def test_model(
                 headers={"Authorization": f"Bearer {request.api_key}"} if request.api_key else {},
                 timeout=30.0,
             )
-            
+
             latency = (time.time() - start) * 1000
-        
+
         if response.status_code == 200:
             return ModelTestResponse(
                 success=True,
@@ -117,7 +116,7 @@ async def test_model(
                 message=f"Error: {response.status_code}",
                 latency_ms=latency,
             )
-    
+
     except Exception as e:
         return ModelTestResponse(
             success=False,
@@ -133,28 +132,29 @@ async def update_model_config(
     current: dict = Depends(require_admin),
 ):
     """Update a model configuration (admin only)."""
-    from mywebui import storage
     import yaml
-    
+
+    from mywebui import storage
+
     config_path = storage.get_config_dir() / "system.yaml"
-    
+
     if config_path.exists():
         with open(config_path) as f:
             data = yaml.safe_load(f) or {}
     else:
         data = {"models": {}}
-    
+
     data.setdefault("models", {})
     data["models"][role] = {
         "provider": config.provider,
         "url": config.url,
         "model": config.model,
     }
-    
+
     if config.api_key:
         data["models"][role]["api_key"] = config.api_key
-    
+
     with open(config_path, "w") as f:
         yaml.dump(data, f)
-    
+
     return {"success": True}

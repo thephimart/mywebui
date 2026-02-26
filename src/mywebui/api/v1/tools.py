@@ -31,7 +31,7 @@ async def get_current_user(request: Request) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    
+
     return {
         "user_id": request.state.user_id,
         "username": request.state.username,
@@ -56,12 +56,12 @@ async def run_tool(
 ):
     """Run a tool with given arguments."""
     registry = get_tool_registry()
-    
+
     result = await registry.execute(
         request.tool_name,
         **request.arguments,
     )
-    
+
     return ToolRunResponse(
         success=result.success,
         output=result.output,

@@ -33,10 +33,8 @@ htmlcov/
 .mypy_cache/
 
 # === OpenCode ===
-.opencode/
-.opencode-cache/
-.opencode-history/
-*.opencode.log
+.opencode*
+*.opencode*
 
 # === Logs ===
 *.log
@@ -48,7 +46,16 @@ htmlcov/
 *.swo
 
 # === Project specific ===
-rag_update.md
+# dev_docs/ - NOT ignored (version controlled)
+
+# === SQLite databases ===
+*.db
+*.sqlite
+*.sqlite3
+
+# === Temp files ===
+*.tmp
+*.bak
 
 # === OS junk ===
 .DS_Store

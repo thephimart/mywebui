@@ -1,23 +1,22 @@
 """Docs API routes for document management and RAG."""
 
-import uuid
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
 
-from mywebui.db import connection
-from mywebui.db.models import Document, Chunk, Embedding
 from mywebui.core.rag import get_rag_service
+from mywebui.db import connection
+from mywebui.db.models import Document
 
 router = APIRouter()
 
 
 class DocumentCreate(BaseModel):
     """Document creation request."""
+
     title: str
     content: str
     visibility: str = "private"
@@ -27,6 +26,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentUpdate(BaseModel):
     """Document update request."""
+
     title: str | None = None
     visibility: str | None = None
     categories: list[str] | None = None
@@ -36,7 +36,8 @@ class DocumentUpdate(BaseModel):
 
 class DocumentResponse(BaseModel):
     """Document response."""
-    id: uuid.UUID
+
+    id: str
     title: str
     visibility: str
     categories: list[str]
@@ -47,12 +48,14 @@ class DocumentResponse(BaseModel):
 
 class DocumentListResponse(BaseModel):
     """Document list response."""
+
     documents: list[DocumentResponse]
     total: int
 
 
 class SearchRequest(BaseModel):
     """Search request."""
+
     query: str
     limit: int = 5
     category: str | None = None
@@ -60,8 +63,9 @@ class SearchRequest(BaseModel):
 
 class SearchResult(BaseModel):
     """Search result."""
-    chunk_id: uuid.UUID
-    document_id: uuid.UUID
+
+    chunk_id: str
+    document_id: str
     text: str
     score: float
     modality: str
@@ -74,7 +78,7 @@ async def get_current_user(request: Request) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    
+
     return {
         "user_id": request.state.user_id,
         "username": request.state.username,
@@ -90,7 +94,7 @@ async def ingest_document(
 ):
     """Ingest a new document."""
     rag_service = get_rag_service()
-    
+
     doc = await rag_service.ingest_document(
         db,
         owner_id=current["user_id"],
@@ -100,7 +104,7 @@ async def ingest_document(
         categories=request.categories,
         source=request.source,
     )
-    
+
     return DocumentResponse(
         id=doc.id,
         title=doc.title,
@@ -124,28 +128,25 @@ async def list_documents(
 ):
     """List documents accessible to the user."""
     query = select(Document)
-    
+
     conditions = []
-    conditions.append(
-        (Document.visibility == "public") |
-        (Document.owner_id == current["user_id"])
-    )
-    
+    conditions.append((Document.visibility == "public") | (Document.owner_id == current["user_id"]))
+
     if visibility:
         conditions.append(Document.visibility == visibility)
-    
+
     if category:
         conditions.append(Document.categories.contains([category]))
-    
+
     query = query.where(*conditions)
-    
+
     count_result = await db.execute(select(Document).where(*conditions))
     total = len(count_result.scalars().all())
-    
+
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     documents = result.scalars().all()
-    
+
     return DocumentListResponse(
         documents=[
             DocumentResponse(
@@ -165,29 +166,27 @@ async def list_documents(
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
 async def get_document(
-    doc_id: uuid.UUID,
+    doc_id: str,
     http_request: Request,
     current: dict = Depends(get_current_user),
     db: AsyncSession = Depends(connection.get_docs_db),
 ):
     """Get a document by ID."""
-    result = await db.execute(
-        select(Document).where(Document.id == doc_id)
-    )
+    result = await db.execute(select(Document).where(Document.id == str(doc_id)))
     doc = result.scalar_one_or_none()
-    
+
     if doc is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
-    
+
     if not _can_access_doc(doc, current["user_id"]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
         )
-    
+
     return DocumentResponse(
         id=doc.id,
         title=doc.title,
@@ -201,30 +200,28 @@ async def get_document(
 
 @router.patch("/{doc_id}", response_model=DocumentResponse)
 async def update_document(
-    doc_id: uuid.UUID,
+    doc_id: str,
     request: DocumentUpdate,
     http_request: Request,
     current: dict = Depends(get_current_user),
     db: AsyncSession = Depends(connection.get_docs_db),
 ):
     """Update a document."""
-    result = await db.execute(
-        select(Document).where(Document.id == doc_id)
-    )
+    result = await db.execute(select(Document).where(Document.id == doc_id))
     doc = result.scalar_one_or_none()
-    
+
     if doc is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
-    
+
     if str(doc.owner_id) != current["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can update the document",
         )
-    
+
     if request.title is not None:
         doc.title = request.title
     if request.visibility is not None:
@@ -235,12 +232,12 @@ async def update_document(
         doc.allowed_users = request.allowed_users
     if request.allowed_roles is not None:
         doc.allowed_roles = request.allowed_roles
-    
+
     doc.updated_at = datetime.utcnow()
-    
+
     await db.commit()
     await db.refresh(doc)
-    
+
     return DocumentResponse(
         id=doc.id,
         title=doc.title,
@@ -254,29 +251,27 @@ async def update_document(
 
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
-    doc_id: uuid.UUID,
+    doc_id: str,
     http_request: Request,
     current: dict = Depends(get_current_user),
     db: AsyncSession = Depends(connection.get_docs_db),
 ):
     """Delete a document."""
-    result = await db.execute(
-        select(Document).where(Document.id == doc_id)
-    )
+    result = await db.execute(select(Document).where(Document.id == str(doc_id)))
     doc = result.scalar_one_or_none()
-    
+
     if doc is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found",
         )
-    
+
     if str(doc.owner_id) != current["user_id"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the owner can delete the document",
         )
-    
+
     await db.delete(doc)
     await db.commit()
 
@@ -290,7 +285,7 @@ async def search_documents(
 ):
     """Search documents using RAG."""
     rag_service = get_rag_service()
-    
+
     results = await rag_service.search(
         db,
         query=request.query,
@@ -298,7 +293,7 @@ async def search_documents(
         limit=request.limit,
         category=request.category,
     )
-    
+
     return {
         "results": [
             {

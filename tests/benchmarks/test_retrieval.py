@@ -10,12 +10,10 @@ Measures:
 import asyncio
 import time
 import uuid
-from dataclasses import dataclass
 
 import pytest
 
-from mywebui.core.rag import Modality, RetrievedChunk, RAGService
-
+from mywebui.core.rag import Modality, RAGService, RetrievedChunk
 
 FIXED_CORPUS = [
     {

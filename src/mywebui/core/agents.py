@@ -1,16 +1,17 @@
 """Agent orchestrator for handling chat interactions."""
 
+import json
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
-from mywebui.core.models import BaseChatModel, Message, get_chat_model, get_embedding_model
-from mywebui.core.tools import get_tool_registry, ToolResult
+from mywebui.core.models import Message, MessageContentPart, get_chat_model
+from mywebui.core.tools import ToolResult, get_tool_registry
 
 
 @dataclass
 class AgentState:
     """Current state of the agent."""
+
     messages: list[Message] = field(default_factory=list)
     tool_results: dict[str, ToolResult] = field(default_factory=dict)
     iteration_count: int = 0
@@ -20,7 +21,8 @@ class AgentState:
 @dataclass
 class AgentResponse:
     """Response from the agent."""
-    content: str
+
+    content: str | list["MessageContentPart"]
     done: bool
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
@@ -44,28 +46,41 @@ class AgentOrchestrator:
         user_message: str,
         system_prompt: str | None = None,
         session_context: list[Message] | None = None,
+        image_inputs: list[str] | None = None,
     ) -> AgentResponse:
         """Process a user message and return agent response."""
-        
+
         state = AgentState(max_iterations=self.max_iterations)
-        
+
         messages: list[Message] = []
-        
+
         if system_prompt:
             messages.append(Message(role="system", content=system_prompt))
-        
+
         if session_context:
             messages.extend(session_context)
-        
-        messages.append(Message(role="user", content=user_message))
-        
+
+        if image_inputs:
+            content_parts: list[MessageContentPart] = [
+                MessageContentPart(type="text", text=user_message)
+            ]
+            for img_b64 in image_inputs:
+                content_parts.append(
+                    MessageContentPart(
+                        type="image_url", image_url={"url": f"data:image/jpeg;base64,{img_b64}"}
+                    )
+                )
+            messages.append(Message(role="user", content=content_parts))
+        else:
+            messages.append(Message(role="user", content=user_message))
+
         tools = self._get_available_tools()
-        
+
         while state.iteration_count < self.max_iterations:
             state.iteration_count += 1
-            
+
             chat_model = get_chat_model("main")
-            
+
             try:
                 result = await chat_model.generate(
                     messages,
@@ -78,64 +93,68 @@ class AgentOrchestrator:
                     done=True,
                     error=f"Model error: {str(e)}",
                 )
-            
+
             choice = result.choices[0]
             assistant_message = choice.message
-            
+
             messages.append(assistant_message)
-            
+
             if assistant_message.tool_calls:
                 tool_call_results = []
-                
+
                 for tool_call in assistant_message.tool_calls:
                     tool_name = tool_call["function"]["name"]
                     tool_args = tool_call["function"]["arguments"]
-                    
+
                     if isinstance(tool_args, str):
                         tool_args = eval(tool_args)
-                    
+
                     input_key = f"{tool_name}:{str(tool_args)}"
-                    
+
                     if self.stop_on_repeat and input_key in self._previous_tool_inputs:
                         break
-                    
+
                     self._previous_tool_inputs.add(input_key)
-                    
+
                     tool_result = await self.tool_registry.execute(
                         tool_name,
                         **tool_args,
                     )
-                    
+
                     tool_result_message = Message(
                         role="tool",
-                        content=json.dumps({
-                            "success": tool_result.success,
-                            "output": tool_result.output,
-                            "error": tool_result.error,
-                        }),
+                        content=json.dumps(
+                            {
+                                "success": tool_result.success,
+                                "output": tool_result.output,
+                                "error": tool_result.error,
+                            }
+                        ),
                         tool_call_id=tool_call["id"],
                     )
-                    
+
                     messages.append(tool_result_message)
-                    tool_call_results.append({
-                        "tool": tool_name,
-                        "result": tool_result,
-                    })
-                
+                    tool_call_results.append(
+                        {
+                            "tool": tool_name,
+                            "result": tool_result,
+                        }
+                    )
+
                 if tool_call_results:
                     continue
-            
+
             if choice.finish_reason == "stop":
                 return AgentResponse(
                     content=assistant_message.content,
                     done=True,
                 )
-            
+
             return AgentResponse(
                 content=assistant_message.content,
                 done=False,
             )
-        
+
         return AgentResponse(
             content=messages[-1].content if messages else "",
             done=True,
@@ -145,26 +164,25 @@ class AgentOrchestrator:
     def _get_available_tools(self) -> list[dict[str, Any]]:
         """Get available tools in OpenAI function calling format."""
         tools = []
-        
+
         for tool in self.tool_registry.list_tools():
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool["description"],
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool["description"],
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                        },
                     },
-                },
-            })
-        
+                }
+            )
+
         return tools
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset the agent state."""
         self._previous_tool_inputs.clear()
-
-
-import json

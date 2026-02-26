@@ -27,6 +27,9 @@ from mywebui.middleware import AuthMiddleware
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     storage.init_storage()
+    from mywebui.db import connection
+
+    connection.init_docs_db()
     yield
 
 
@@ -69,6 +72,7 @@ async def health_check() -> dict:
 def main() -> None:
     """Run the application."""
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

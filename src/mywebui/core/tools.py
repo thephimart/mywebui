@@ -3,7 +3,6 @@
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +12,7 @@ from mywebui.config import get_config
 @dataclass
 class ToolResult:
     """Result of a tool execution."""
+
     success: bool
     output: str
     logs: dict[str, Any]
@@ -48,7 +48,7 @@ class FilesystemTool(BaseTool):
     async def execute(self, **kwargs) -> ToolResult:
         config = get_config()
         allowed_paths = config.tools.filesystem.get("allowed_paths", [])
-        
+
         if not allowed_paths:
             return ToolResult(
                 success=False,
@@ -56,9 +56,9 @@ class FilesystemTool(BaseTool):
                 logs={},
                 error="No allowed paths configured",
             )
-        
+
         file_path = Path(kwargs["path"]).resolve()
-        
+
         is_allowed = False
         for allowed in allowed_paths:
             allowed_path = Path(allowed).resolve()
@@ -68,7 +68,7 @@ class FilesystemTool(BaseTool):
                 break
             except ValueError:
                 continue
-        
+
         if not is_allowed:
             return ToolResult(
                 success=False,
@@ -76,9 +76,9 @@ class FilesystemTool(BaseTool):
                 logs={},
                 error=f"Path not in allowed directories: {kwargs['path']}",
             )
-        
+
         operation = kwargs.get("operation", "read")
-        
+
         try:
             if operation == "read":
                 if file_path.is_file():
@@ -95,7 +95,7 @@ class FilesystemTool(BaseTool):
                         logs={},
                         error=f"Not a file: {kwargs['path']}",
                     )
-            
+
             elif operation == "list":
                 if file_path.is_dir():
                     items = list(file_path.iterdir())
@@ -111,7 +111,7 @@ class FilesystemTool(BaseTool):
                         logs={},
                         error=f"Not a directory: {kwargs['path']}",
                     )
-            
+
             elif operation == "glob":
                 pattern = kwargs.get("pattern", "*")
                 items = list(file_path.glob(pattern))
@@ -120,7 +120,7 @@ class FilesystemTool(BaseTool):
                     output="\n".join([str(i) for i in items]),
                     logs={"path": str(file_path), "pattern": pattern, "count": len(items)},
                 )
-            
+
             else:
                 return ToolResult(
                     success=False,
@@ -128,7 +128,7 @@ class FilesystemTool(BaseTool):
                     logs={},
                     error=f"Unknown operation: {operation}",
                 )
-        
+
         except Exception as e:
             return ToolResult(
                 success=False,
@@ -160,15 +160,13 @@ class WebSearchTool(BaseTool):
 
         try:
             from ddgs import DDGS
+
             query = kwargs["query"]
 
             ddgs = DDGS()
             results = ddgs.text(query, max_results=5)
 
-            output = "\n\n".join([
-                f"{r.get('title', '')}: {r.get('href', '')}"
-                for r in results
-            ])
+            output = "\n\n".join([f"{r.get('title', '')}: {r.get('href', '')}" for r in results])
 
             return ToolResult(
                 success=True,
@@ -214,54 +212,85 @@ class WebFetchTool(BaseTool):
             import httpx
             from bs4 import BeautifulSoup
 
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(self.TIMEOUT_SECONDS),
-                follow_redirects=True,
-            ) as client:
-                response = await client.get(url)
+            response = None
+            ssl_error = None
 
-                if response.status_code != 200:
-                    return ToolResult(
-                        success=False,
-                        output="",
-                        logs={},
-                        error=f"HTTP {response.status_code}",
-                    )
+            for try_system_cert in [False, True]:
+                try:
+                    verify_cert: bool | str = True
+                    if try_system_cert:
+                        verify_cert = "/usr/lib/ssl/cert.pem"
+                    else:
+                        try:
+                            import certifi
 
-                content_type = response.headers.get("content-type", "")
-                if "text/html" not in content_type and "text/plain" not in content_type:
-                    return ToolResult(
-                        success=False,
-                        output="",
-                        logs={},
-                        error=f"Unsupported content type: {content_type}",
-                    )
+                            verify_cert = certifi.where()
+                        except ImportError:
+                            continue
 
-                content = response.text
-                if len(content) > self.MAX_SIZE_BYTES:
-                    content = content[:self.MAX_SIZE_BYTES]
+                    async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(self.TIMEOUT_SECONDS),
+                        follow_redirects=True,
+                        verify=verify_cert,
+                    ) as client:
+                        response = await client.get(url)
+                    break
+                except Exception as e:
+                    ssl_error = e
+                    if "SSL" in str(e) or "certificate" in str(e).lower():
+                        continue
+                    raise
 
-                soup = BeautifulSoup(content, "html.parser")
-
-                title = soup.title.string if soup.title else ""
-
-                for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-                    tag.decompose()
-
-                main_content = soup.get_text(separator="\n", strip=True)
-
-                lines = [line for line in main_content.split("\n") if line.strip()]
-                clean_text = "\n".join(lines[:500])
-
+            if response is None:
                 return ToolResult(
-                    success=True,
-                    output=clean_text,
-                    logs={
-                        "url": url,
-                        "title": title,
-                        "size_bytes": len(content),
-                    },
+                    success=False,
+                    output="",
+                    logs={},
+                    error=f"HTTP request failed: {ssl_error}",
                 )
+
+            if response.status_code != 200:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    logs={},
+                    error=f"HTTP {response.status_code}",
+                )
+
+            content_type = response.headers.get("content-type", "")
+            if "text/html" not in content_type and "text/plain" not in content_type:
+                return ToolResult(
+                    success=False,
+                    output="",
+                    logs={},
+                    error=f"Unsupported content type: {content_type}",
+                )
+
+            content = response.text
+            if len(content) > self.MAX_SIZE_BYTES:
+                content = content[: self.MAX_SIZE_BYTES]
+
+            soup = BeautifulSoup(content, "html.parser")
+
+            title = soup.title.string if soup.title else ""
+
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+                tag.decompose()
+
+            main_content = soup.get_text(separator="\n", strip=True)
+
+            lines = [line for line in main_content.split("\n") if line.strip()]
+            clean_text = "\n".join(lines[:500])
+
+            return ToolResult(
+                success=True,
+                output=clean_text,
+                logs={
+                    "url": url,
+                    "title": title,
+                    "size_bytes": len(content),
+                },
+            )
 
         except httpx.TimeoutException:
             return ToolResult(
@@ -316,23 +345,39 @@ class WebCrawlTool(BaseTool):
             from crawl4ai import AsyncWebCrawler
 
             async with AsyncWebCrawler() as crawler:
-                results = await crawler.arun(
-                    url=url,
-                    max_depth=depth,
-                    max_pages=max_pages,
-                    verbose=False,
-                )
+                result = await crawler.arun(url=url)
 
-                output_parts = []
-                for i, result in enumerate(results[:10]):
-                    title = result.meta.get("title", f"Page {i+1}")
-                    output_parts.append(f"## {title}\n{result.markdown[:2000]}")
+                if result is None:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        logs={},
+                        error="No result from crawler",
+                    )
 
-                return ToolResult(
-                    success=True,
-                    output="\n\n---\n\n".join(output_parts),
-                    logs={"url": url, "pages_crawled": len(results)},
-                )
+                try:
+                    title = "Page 1"
+                    if hasattr(result, "meta") and result.meta:
+                        if hasattr(result.meta, "get"):
+                            title = result.meta.get("title", "Page 1")
+                    content = ""
+                    if hasattr(result, "markdown"):
+                        content = result.markdown or ""
+                    elif hasattr(result, "text"):
+                        content = result.text or ""
+
+                    return ToolResult(
+                        success=True,
+                        output=f"## {title}\n{content[:2000]}",
+                        logs={"url": url, "pages_crawled": 1},
+                    )
+                except Exception as e:
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        logs={},
+                        error=f"Error parsing result: {str(e)}",
+                    )
 
         except ImportError:
             return ToolResult(
@@ -388,7 +433,10 @@ class WebInteractTool(BaseTool):
                     if instruction == "scroll":
                         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     elif instruction == "click_agree":
-                        await page.click("button:has-text('agree'), button:has-text('accept'), button:has-text('OK')", timeout=2000)
+                        await page.click(
+                            "button:has-text('agree'), button:has-text('accept'), button:has-text('OK')",
+                            timeout=2000,
+                        )
 
                 content = await page.content()
                 await browser.close()
@@ -440,14 +488,13 @@ class ToolRegistry:
     def list_tools(self) -> list[dict[str, str]]:
         """List all available tools."""
         return [
-            {"name": tool.name, "description": tool.description}
-            for tool in self._tools.values()
+            {"name": tool.name, "description": tool.description} for tool in self._tools.values()
         ]
 
     async def execute(self, tool_name: str, **kwargs) -> ToolResult:
         """Execute a tool by name."""
         tool = self.get(tool_name)
-        
+
         if tool is None:
             return ToolResult(
                 success=False,
@@ -455,7 +502,7 @@ class ToolRegistry:
                 logs={},
                 error=f"Unknown tool: {tool_name}",
             )
-        
+
         if not tool.validate_args(**kwargs):
             return ToolResult(
                 success=False,
@@ -463,13 +510,13 @@ class ToolRegistry:
                 logs={},
                 error=f"Invalid arguments for tool: {tool_name}",
             )
-        
+
         try:
             return await asyncio.wait_for(
                 tool.execute(**kwargs),
                 timeout=30.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ToolResult(
                 success=False,
                 output="",

@@ -2,14 +2,10 @@
 
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
-from mywebui.db import connection
 from mywebui import storage
 
 router = APIRouter()
@@ -17,6 +13,7 @@ router = APIRouter()
 
 class AttachmentResponse(BaseModel):
     """Attachment response."""
+
     id: uuid.UUID
     filename: str
     content_type: str
@@ -32,7 +29,7 @@ async def get_current_user(request: Request) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    
+
     return {
         "user_id": request.state.user_id,
         "username": request.state.username,
@@ -46,21 +43,21 @@ async def upload_attachment(
 ):
     """Upload an attachment."""
     attachment_id = uuid.uuid4()
-    
+
     attachments_dir = storage.get_attachments_dir(current["username"])
     attachments_dir.mkdir(parents=True, exist_ok=True)
-    
+
     file_path = attachments_dir / f"{attachment_id}_{file.filename}"
-    
+
     content = await file.read()
-    
+
     with open(file_path, "wb") as f:
         f.write(content)
-    
+
     return AttachmentResponse(
         id=attachment_id,
-        filename=file.filename,
-        content_type=file.content_type,
+        filename=file.filename or "unknown",
+        content_type=file.content_type or "application/octet-stream",
         size=len(content),
         status="uploaded",
         created_at=datetime.utcnow(),
@@ -74,7 +71,7 @@ async def get_attachment(
 ):
     """Get attachment metadata."""
     attachments_dir = storage.get_attachments_dir(current["username"])
-    
+
     for file_path in attachments_dir.glob(f"{attachment_id}_*"):
         return AttachmentResponse(
             id=attachment_id,
@@ -84,7 +81,7 @@ async def get_attachment(
             status="uploaded",
             created_at=datetime.utcnow(),
         )
-    
+
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Attachment not found",
@@ -98,11 +95,11 @@ async def delete_attachment(
 ):
     """Delete an attachment."""
     attachments_dir = storage.get_attachments_dir(current["username"])
-    
+
     for file_path in attachments_dir.glob(f"{attachment_id}_*"):
         file_path.unlink()
         return
-    
+
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Attachment not found",
