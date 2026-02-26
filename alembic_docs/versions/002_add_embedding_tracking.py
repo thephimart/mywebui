@@ -1,7 +1,7 @@
 """Add embedding model tracking fields
 
 Revision ID: 002_add_embedding_tracking
-Revises: 001_docs_initial
+Revises: 001_initial
 Create Date: 2024-01-15 00:00:00.000000
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "002_add_embedding_tracking"
-down_revision: str | None = "001_docs_initial"
+down_revision: str | None = "001_initial"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

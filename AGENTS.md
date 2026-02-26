@@ -235,13 +235,13 @@ The project uses two independent Alembic environments:
 alembic_docs/          # Docs database (shared)
 ├── env.py
 ├── versions/
-│   └── 001_docs_initial.py
+│   └── 001_initial.py
 └── alembic_docs.ini
 
 alembic_users/        # User history databases (per-user)
 ├── env.py
 ├── versions/
-│   └── 001_users_initial.py
+│   └── 001_initial.py
 └── alembic_users.ini
 ```
 
