@@ -135,7 +135,7 @@ models:
     model: "llama3"
   embedding:
     provider: openai-compatible
-    url: "http://localhost:11434"
+    url: "http://localhost:11433"
     model: "nomic-embed-text"
 
 tools:

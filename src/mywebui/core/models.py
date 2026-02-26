@@ -211,9 +211,7 @@ class LlamaServerChatModel(OpenAICompatibleChatModel):
     ) -> ChatResult:
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [
-                {"role": m.role, "content": _serialize_message_content(m.content)} for m in messages
-            ],
+            "messages": [{"role": m.role, "content": _serialize_message_content(m.content)} for m in messages],
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
@@ -426,9 +424,7 @@ class OpenAICompatibleVLEmbeddingModel(BaseVLEmbeddingModel):
         inputs: list[dict[str, Any]] = []
         for img_bytes in images:
             b64 = base64.b64encode(img_bytes).decode("utf-8")
-            inputs.append(
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
-            )
+            inputs.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
 
         payload: dict[str, Any] = {
             "model": self.model,
@@ -556,14 +552,14 @@ def get_embedding_model(role: str = "embedding") -> BaseEmbeddingModel:
 
         if provider == ProviderType.LLAMA_SERVER:
             _embedding_models[role] = LlamaServerEmbeddingModel(
-                url=model_config.url or "http://localhost:11434",
+                url=model_config.url or "http://localhost:11433",
                 model=model_config.model or "nomic-embed-text",
                 api_key=model_config.api_key,
                 dimension=config.rag.embedding_dimension,
             )
         else:
             _embedding_models[role] = OpenAICompatibleEmbeddingModel(
-                url=model_config.url or "http://localhost:11434",
+                url=model_config.url or "http://localhost:11433",
                 model=model_config.model or "nomic-embed-text",
                 api_key=model_config.api_key,
                 dimension=config.rag.embedding_dimension,
@@ -582,14 +578,14 @@ def get_vl_embedding_model(role: str = "image_embedding") -> BaseVLEmbeddingMode
 
         if provider == ProviderType.LLAMA_SERVER:
             _vl_embedding_models[role] = LlamaServerVLEmbeddingModel(
-                url=model_config.url or "http://localhost:11434",
+                url=model_config.url or "http://localhost:11433",
                 model=model_config.model or "qwen2-vl-2b",
                 api_key=model_config.api_key,
                 dimension=config.rag.embedding_dimension,
             )
         else:
             _vl_embedding_models[role] = OpenAICompatibleVLEmbeddingModel(
-                url=model_config.url or "http://localhost:11434",
+                url=model_config.url or "http://localhost:11433",
                 model=model_config.model or "qwen2-vl-2b",
                 api_key=model_config.api_key,
                 dimension=config.rag.embedding_dimension,

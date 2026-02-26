@@ -90,6 +90,8 @@ class ComfyUIConfig(BaseModel):
 class Config(BaseSettings):
     """Application configuration."""
 
+    model_config = {"env_prefix": "MYWEBUI_"}
+
     debug: bool = False
 
     server: ServerConfig = ServerConfig()
@@ -114,9 +116,6 @@ class Config(BaseSettings):
     def audit_database_url(self) -> str:
         """Get the audit database URL."""
         return f"sqlite+aiosqlite:///{self.data_dir}/audit/events.db"
-
-    class Config:
-        env_prefix = "MYWEBUI_"
 
 
 @lru_cache

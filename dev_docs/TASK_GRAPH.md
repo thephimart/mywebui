@@ -29,8 +29,13 @@
 | 4 | Authentication System | ✅ Complete |
 | 5 | Provider Configuration (llama-server) | ✅ Complete |
 | 6.1 | Tools Implementation (filesystem, web) | ✅ Complete |
+| A1 | Alembic Migrations (authoritative schema) | ✅ Complete |
+| A2 | Stub Missing APIs (501 + audit) | ✅ Complete |
+| A3 | Wizard Flow (existing data detection) | ✅ Complete |
+| A4 | Audit Event Coverage (13 event types) | ✅ Complete |
+| A5 | FRONTEND_CONTRACT.md | ✅ Complete |
 
-**Test Results**: 84 tests passing (34 RAG + 30 PDF + 16 VL + 4 benchmarks)
+**Test Results**: 84 tests passing
 
 ---
 
@@ -87,20 +92,28 @@
 
 ## Immediate Priority: Backend Spine (Must Finish First)
 
-### Phase A1: Alembic Migrations (CRITICAL)
+### Phase A1: Alembic Migrations (CRITICAL) ✅ COMPLETE
 
 **Goal**: Make Alembic the authoritative schema. No ad-hoc schema changes after this.
 
-**Status**: Migration files exist but not integrated as authoritative source.
+**Status**: ✅ Complete - Alembic is now the authoritative schema source.
 
-**Tasks**:
-- [ ] Integrate Alembic as sole authority for schema evolution
-- [ ] Baseline current schema into migrations
-- [ ] One migration per logical table group (docs, users, audit)
-- [ ] Lock DB schema - no CREATE TABLE after this point
-- [ ] Add embedding_model_id, dim, modality tracking to schema
-- [ ] Enforce compatibility at query time
-- [ ] Make re-embedding an explicit migration path
+**Completed**:
+- [x] Integrate Alembic as sole authority for schema evolution
+- [x] Baseline current schema into migrations
+- [x] One migration per logical table group (docs, users, audit)
+- [x] Lock DB schema - no CREATE TABLE after this point
+- [x] Add embedding_model_id, dim, modality tracking to schema
+
+**Deferred (runtime/operational concerns, not schema authority)**:
+- [ ] Embedding compatibility enforcement at query time (Phase B)
+- [ ] Explicit re-embedding workflow (non-Alembic, Phase B/D)
+
+**Changes**:
+- Removed `Base.metadata.create_all()` from wizard.py
+- Removed deprecated `create_user_tables_async()` and `create_audit_tables_async()` from connection.py
+- Added migration `002_add_embedding_tracking.py` for embedding model tracking fields
+- Renamed alembic env.py files to fix mypy duplicate module error (docs_env.py, users_env.py)
 
 **Why?** Without Alembic:
 - Every schema tweak = silent breakage
@@ -109,59 +122,105 @@
 
 ---
 
-### Phase A2: Stub Missing APIs
+### Phase A2: Stub Missing APIs ✅ COMPLETE
 
 **Goal**: Return 501 Not Implemented with audit events for intentionally unsupported features.
 
-**Tasks**:
-- [ ] Stub exec_python - return 501, log audit event
-- [ ] Stub exec_shell - return 501, log audit event
-- [ ] Stub Attachment ingestion API - return 501 for internals, provide upload endpoint contract
-- [ ] Document what is intentionally unsupported
+**Completed**:
+- [x] Stub exec_python - return 501, log audit event (`POST /api/tools/exec_python`)
+- [x] Stub exec_shell - return 501, log audit event (`POST /api/tools/exec_shell`)
+- [x] Stub Attachment ingestion API - return 501 (`POST /api/attachments/{id}/ingest`)
 
 **Rationale**: Frontend needs to know what states exist and what is intentionally unsupported.
 
+**Intentionally Unsupported**:
+| Feature | Endpoint | Reason |
+|---------|----------|--------|
+| exec_python | POST /api/tools/exec_python | Security risk |
+| exec_shell | POST /api/tools/exec_shell | Security risk |
+| Attachment ingestion | POST /api/attachments/{id}/ingest | Not yet implemented (OCR, transcription, thumbnails) |
+
 ---
 
-### Phase A3: Wizard Flow
+### Phase A3: Wizard Flow ✅ COMPLETE
 
 **Goal**: First-run setup for admin account and system configuration.
 
-**Tasks**:
-- [ ] Implement `/api/wizard/status` endpoint
-- [ ] Implement `/api/wizard/complete` endpoint
-- [ ] Add existing data detection (reuse/backup/abort)
+**Completed**:
+- [x] Implement `/api/wizard/status` endpoint
+- [x] Implement `/api/wizard/complete` endpoint
+- [x] Add existing data detection (reuse/backup/abort)
+
+**Endpoints**:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| /api/wizard/status | GET | Returns state: not_started, needs_setup_with_existing_data, completed |
+| /api/wizard/admin | POST | Create admin user (legacy) |
+| /api/wizard/complete | POST | Complete wizard with action: reuse, backup, abort |
+
+**Existing Data Detection**:
+- Detects users, documents, audit DB, user directories
+- Action `reuse`: Use existing data as-is
+- Action `backup`: Backup to `~/.mywebui.backup.{timestamp}` and start fresh
+- Action `abort`: Cancel if existing data detected
 
 ---
 
-### Phase A4: Full Audit Event Coverage (At Minimum Stubs)
+### Phase A4: Full Audit Event Coverage ✅ COMPLETE
 
 **Goal**: Complete audit logging for all security-relevant events.
 
-**Tasks**:
-- [ ] Stub `tool_command` event (even if shallow)
-- [ ] Stub `doc_ingest` / `doc_delete` events
-- [ ] Stub `acl_change` event
-- [ ] Stub `model_config_change` event
-- [ ] Stub `session_compaction` event
-- [ ] Stub `attachment_upload` event
-- [ ] Stub `session_revoke` event
+**Completed**:
+- [x] Stub `tool_command` event (`log_tool_command`)
+- [x] Stub `doc_ingest` / `doc_delete` events (`log_doc_ingest`, `log_doc_delete`)
+- [x] Stub `acl_change` event (`log_acl_change`)
+- [x] Stub `model_config_change` event (`log_model_config_change`)
+- [x] Stub `session_compaction` event (`log_session_compaction`)
+- [x] Stub `attachment_upload` event (`log_attachment_upload`)
+- [x] Stub `session_revoke` event (`log_session_revoke`)
+
+**All Available Audit Events**:
+| Event | Function | Description |
+|-------|-----------|-------------|
+| login | log_login | User login |
+| logout | log_logout | User logout |
+| session_refresh | log_session_refresh | Session token refresh |
+| session_revoke | log_session_revoke | Session revocation |
+| session_compaction | log_session_compaction | Session message compaction |
+| tool_execution | log_tool_execution | Tool execution |
+| tool_command | log_tool_command | Blocked tool command attempt |
+| chat_message | log_chat_message | Chat message sent |
+| doc_ingest | log_doc_ingest | Document ingested |
+| doc_delete | log_doc_delete | Document deleted |
+| acl_change | log_acl_change | ACL changes |
+| model_config_change | log_model_config_change | Model config changed |
+| attachment_upload | log_attachment_upload | Attachment uploaded |
 
 ---
 
-### Phase A5: FRONTEND_CONTRACT.md
+### Phase A5: FRONTEND_CONTRACT.md ✅ COMPLETE
 
 **Goal**: Produce exhaustive contract document for frontend developers.
 
-**Status**: New document to create after backend spine is complete.
+**Status**: ✅ Complete - Document created at `/FRONTEND_CONTRACT.md`
 
 **Contents**:
 - Routes (all endpoints)
 - Request/response schemas
-- Streaming semantics
-- Error codes
-- Auth requirements
-- Capability flags (what's enabled/disabled)
+- Streaming semantics (SSE + WebSocket)
+- Error codes (canonical envelope)
+- Auth requirements (cookie-based)
+- Capability flags (`/config/capabilities` for frontend, `/config/system` for admin)
+- Wizard state machine diagram
+- Non-goals section
+
+**Polished additions**:
+- Stable enum guarantee for capability states
+- Session response shape documented
+- Wizard state diagram
+- Streaming cancellation semantics
+- Pagination ordering rules
+- Document ingest idempotency note
 
 ---
 
@@ -286,12 +345,14 @@
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Pydantic class-based config deprecation | Low | Use ConfigDict instead |
-| Asyncio event loop in tests | Low | Use pytest-asyncio properly |
+| Pydantic class-based config deprecation | ✅ Fixed | Use ConfigDict instead |
+| Asyncio event loop in tests | ✅ Fixed | Use pytest-asyncio properly |
 | YAML stubs missing | Low | `types-PyYAML` optional |
 | SQLite UUID binding | Low | Convert UUIDs to strings before DB operations |
 | SSL certificate issues | Low | Use system certs fallback (/usr/lib/ssl/cert.pem) |
-| Alembic not authoritative | Critical | Must fix before frontend work |
+| Alembic not authoritative | ✅ Fixed | Now authoritative, migration added |
+| Embedding compatibility at query time | Deferred | Runtime policy concern - Phase B |
+| Re-embedding workflow | Deferred | Operational workflow - Phase B/D |
 
 ---
 
@@ -337,11 +398,11 @@
 
 | Step | Task | Priority |
 |------|------|----------|
-| 1 | Alembic migrations as authoritative schema | 🔴 CRITICAL |
-| 2 | Stub exec_python/exec_shell (501 + audit) | 🔴 CRITICAL |
-| 3 | Stub attachment API | 🔴 CRITICAL |
-| 4 | Wizard flow endpoints | 🔴 CRITICAL |
-| 5 | Audit event stubs | 🔴 CRITICAL |
+| 1 | Alembic migrations as authoritative schema | ✅ Complete |
+| 2 | Stub exec_python/exec_shell (501 + audit) | ✅ Complete |
+| 3 | Stub attachment API | ✅ Complete |
+| 4 | Wizard flow endpoints | ✅ Complete |
+| 5 | Audit event stubs | ✅ Complete |
 | 6 | Write FRONTEND_CONTRACT.md | 🟡 BLOCKS FRONTEND |
 | 7 | Ollama provider (optional) | 🟢 Optional |
 | 8 | Attachment processing | 🟢 Future |
