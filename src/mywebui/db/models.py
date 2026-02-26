@@ -9,11 +9,13 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     """Base class for all models."""
+
     pass
 
 
 class User(Base):
     """User model."""
+
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -26,6 +28,7 @@ class User(Base):
 
 class Document(Base):
     """Document model."""
+
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -48,6 +51,7 @@ class Document(Base):
 
 class Chunk(Base):
     """Document chunk model."""
+
     __tablename__ = "chunks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -59,29 +63,33 @@ class Chunk(Base):
     token_count: Mapped[int] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
-    __table_args__ = (
-        Index("idx_chunks_document", "document_id"),
-    )
+    __table_args__ = (Index("idx_chunks_document", "document_id"),)
 
 
 class Embedding(Base):
     """Embedding model."""
+
     __tablename__ = "embeddings"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     chunk_id: Mapped[str] = mapped_column(String(36), ForeignKey("chunks.id"), nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    embedding_model_id: Mapped[str] = mapped_column(String(36), nullable=True)
     modality: Mapped[str] = mapped_column(Enum("text", "image", name="embedding_modality"), nullable=False)
+    dimension: Mapped[int] = mapped_column(Integer, nullable=True)
     vector: Mapped[bytes] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     __table_args__ = (
         Index("idx_embeddings_chunk", "chunk_id"),
         Index("idx_embeddings_model", "model_name"),
+        Index("idx_embeddings_model_id", "embedding_model_id"),
     )
 
 
 class AuditEvent(Base):
     """Audit event model."""
+
     __tablename__ = "audit_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

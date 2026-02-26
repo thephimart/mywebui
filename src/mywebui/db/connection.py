@@ -102,9 +102,7 @@ def has_alembic_version_table(db_url: str) -> bool:
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'")
         result = cursor.fetchone() is not None
         conn.close()
         return result
@@ -268,32 +266,6 @@ def get_user_engine(username: str) -> AsyncEngine:
         )
         _user_engines[username] = engine
     return _user_engines[username]
-
-
-async def create_user_tables_async(engine: AsyncEngine) -> None:
-    """Create tables in user database if they don't exist.
-
-    DEPRECATED: This function should not be used for existing databases.
-    Use init_user_db() instead which handles Alembic migrations.
-    Kept for backwards compatibility with new databases.
-    """
-    from mywebui.db.user_models import Base
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-
-async def create_audit_tables_async() -> None:
-    """Create tables in audit database if they don't exist.
-
-    DEPRECATED: This function should not be used for existing databases.
-    Use init_docs_db() or Alembic migrations instead.
-    """
-    from mywebui.db.models import AuditEvent
-
-    engine = get_audit_engine()
-    async with engine.begin() as conn:
-        await conn.run_sync(AuditEvent.metadata.create_all)
 
 
 def get_user_session_factory(username: str) -> async_sessionmaker[AsyncSession]:
