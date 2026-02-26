@@ -1,13 +1,13 @@
 [project]
 name = "mywebui"
-version = "0.1.0a1"
-description = "Local-first Web UI for AI and automation workloads (pure Python)"
+version = "0.1.0a2"
+description = "Local-first AI workbench and web UI for automation workloads (pure Python)"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 
 authors = [
-  { name = "Philip Martens" }
+  { name = "Phimart Consulting" }
 ]
 
 keywords = [
@@ -29,6 +29,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3 :: Only",
   "Operating System :: OS Independent"
+  "Framework :: FastAPI",
 ]
 
 dependencies = [

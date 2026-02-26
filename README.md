@@ -14,12 +14,13 @@ No hidden execution.
 
 ## Status
 
-🚧 **Alpha** — Backend APIs complete, frontend pending.
+🚧 **Alpha** — Backend complete, frontend pending.
 
-**Current phase**: Freezing scope, finishing backend spine.
+**Current phase**: Backend spine frozen.
 - Backend is **structurally complete** (not feature-complete)
 - APIs stable, data models stable
-- Next: Alembic migrations as authoritative schema, then FRONTEND_CONTRACT.md
+- Alembic is the authoritative schema
+- FRONTEND_CONTRACT.md defines the complete frontend boundary
 
 ---
 
@@ -40,7 +41,7 @@ No hidden execution.
 
 - A **local-first** AI workbench
 - **Multi-user** with explicit authentication and roles
-- **Secure-by-design**, running inside a hardened WSL boundary
+- **Secure-by-design**, running inside a local trusted boundary (e.g. WSL, bare metal, VM)
 - **Auditable and observable** by default
 - **Pure Python** backend
 
@@ -77,7 +78,7 @@ If something happens, you can see *who*, *when*, and *why*.
 - Agent runtime with tool orchestration — **complete**
 - SQLite-based storage (docs, vectors, history, audit) — **complete**
 - Local model endpoints (configurable) — **complete**
-- Web UI (local) — **pending**
+- Web UI (local) — **pending (contract finalized)**
 
 All components communicate via **explicit JSON APIs**.
 
@@ -112,12 +113,15 @@ All components communicate via **explicit JSON APIs**.
 
 ## What's Pending
 
-### Before Frontend
-1. **Alembic migrations** — Make schema authoritative
-2. **Stub missing APIs** — exec_python, exec_shell return 501
-3. **Wizard flow** — First-run setup endpoints
-4. **Audit coverage** — Complete event stubs
-5. **FRONTEND_CONTRACT.md** — Exhaustive API contract
+### Backend Milestones (Completed)
+1. **Alembic migrations** — Authoritative schema
+2. **Stubbed unsafe APIs** — Explicit 501 + audit
+3. **Wizard flow** — First-run state machine
+4. **Audit coverage** — 13 event types
+5. **FRONTEND_CONTRACT.md** — Exhaustive frontend contract
+
+### Next Milestone
+- Implement frontend against the frozen contract
 
 ### Future Features
 - Ollama provider (optional)
