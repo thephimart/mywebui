@@ -239,7 +239,8 @@ def another_function():
 class TestMMRReranking:
     """Tests for Max Marginal Relevance re-ranking."""
 
-    def test_mmr_guard_k_equals_1(self):
+    @pytest.mark.asyncio
+    async def test_mmr_guard_k_equals_1(self):
         """MMR guard should handle k=1 case."""
         import uuid
 
@@ -260,30 +261,24 @@ class TestMMRReranking:
         service = RAGService.__new__(RAGService)
         service.mmr_lambda = 0.5
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(
-            service._mmr_rerank(chunks, [0.1] * 2048, k=1)
-        )
+        result = await service._mmr_rerank(chunks, [0.1] * 2048, k=1)
 
         assert len(result) == 1
 
-    def test_mmr_empty_input(self):
+    @pytest.mark.asyncio
+    async def test_mmr_empty_input(self):
         """MMR should handle empty input."""
         from mywebui.core.rag import RAGService
 
         service = RAGService.__new__(RAGService)
         service.mmr_lambda = 0.5
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(
-            service._mmr_rerank([], [0.1] * 2048, k=3)
-        )
+        result = await service._mmr_rerank([], [0.1] * 2048, k=3)
 
         assert result == []
 
-    def test_mmr_k_larger_than_input(self):
+    @pytest.mark.asyncio
+    async def test_mmr_k_larger_than_input(self):
         """MMR should return all chunks when k > len(chunks)."""
         import uuid
 
@@ -311,11 +306,7 @@ class TestMMRReranking:
         service = RAGService.__new__(RAGService)
         service.mmr_lambda = 0.5
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(
-            service._mmr_rerank(chunks, [0.1] * 2048, k=10)
-        )
+        result = await service._mmr_rerank(chunks, [0.1] * 2048, k=10)
 
         assert len(result) == 2
 

@@ -49,17 +49,17 @@ class TestOpenAICompatibleVLEmbeddingModel:
     def test_initialization(self):
         """Can initialize with url and model."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
         )
-        assert model.url == "http://localhost:11434"
+        assert model.url == "http://localhost:11433"
         assert model.model == "qwen2-vl-2b"
         assert model.dimension is None
 
     def test_initialization_with_dimension(self):
         """Can initialize with dimension."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
             dimension=2048,
         )
@@ -68,15 +68,15 @@ class TestOpenAICompatibleVLEmbeddingModel:
     def test_initialization_strips_trailing_slash(self):
         """URL trailing slash is stripped."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434/",
+            url="http://localhost:11433/",
             model="qwen2-vl-2b",
         )
-        assert model.url == "http://localhost:11434"
+        assert model.url == "http://localhost:11433"
 
     def test_initialization_with_api_key(self):
         """Can initialize with API key."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
             api_key="secret-key",
         )
@@ -89,7 +89,7 @@ class TestVLEmbeddingClientProperty:
     def test_client_created_on_demand(self):
         """Client is created on first access."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
         )
         client = model.client
@@ -98,7 +98,7 @@ class TestVLEmbeddingClientProperty:
     def test_client_reused(self):
         """Client is reused on subsequent access."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
         )
         client1 = model.client
@@ -113,7 +113,7 @@ class TestEmbedImages:
     async def test_embed_images_basic(self):
         """Can embed a single image."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
         )
 
@@ -138,7 +138,7 @@ class TestEmbedImages:
     async def test_embed_images_multiple(self):
         """Can embed multiple images."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
         )
 
@@ -164,7 +164,7 @@ class TestEmbedImages:
     async def test_embed_images_with_api_key(self):
         """Includes API key in headers when set."""
         model = OpenAICompatibleVLEmbeddingModel(
-            url="http://localhost:11434",
+            url="http://localhost:11433",
             model="qwen2-vl-2b",
             api_key="test-key",
         )
@@ -192,12 +192,14 @@ class TestGetVLEmbeddingModel:
 
     def test_returns_vl_embedding_model(self):
         """Returns BaseVLEmbeddingModel instance."""
+        from mywebui.config import ModelConfig
+
         with patch("mywebui.core.models.get_config") as mock_config:
             mock_cfg = MagicMock()
-            mock_cfg.models.image_embedding = {
-                "url": "http://localhost:11434",
-                "model": "qwen2-vl-2b",
-            }
+            mock_cfg.models.image_embedding = ModelConfig(
+                url="http://localhost:11433",
+                model="qwen2-vl-2b",
+            )
             mock_cfg.rag.embedding_dimension = 2048
             mock_config.return_value = mock_cfg
 
@@ -207,12 +209,14 @@ class TestGetVLEmbeddingModel:
 
     def test_caching(self):
         """Model is cached after first call."""
+        from mywebui.config import ModelConfig
+
         with patch("mywebui.core.models.get_config") as mock_config:
             mock_cfg = MagicMock()
-            mock_cfg.models.image_embedding = {
-                "url": "http://localhost:11434",
-                "model": "qwen2-vl-2b",
-            }
+            mock_cfg.models.image_embedding = ModelConfig(
+                url="http://localhost:11433",
+                model="qwen2-vl-2b",
+            )
             mock_cfg.rag.embedding_dimension = 2048
             mock_config.return_value = mock_cfg
 
