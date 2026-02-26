@@ -4,24 +4,37 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from mywebui.core import audit as audit_core
 from mywebui.core.tools import get_tool_registry
+from mywebui.db import connection
 
 router = APIRouter()
 
 
 class ToolRunRequest(BaseModel):
     """Tool execution request."""
+
     tool_name: str
     arguments: dict[str, Any] = {}
 
 
 class ToolRunResponse(BaseModel):
     """Tool execution response."""
+
     success: bool
     output: str
     logs: dict[str, Any]
     error: str | None = None
+
+
+class StubResponse(BaseModel):
+    """Response for intentionally unsupported features."""
+
+    status_code: int
+    detail: str
+    feature: str
 
 
 async def get_current_user(request: Request) -> dict:
@@ -67,4 +80,52 @@ async def run_tool(
         output=result.output,
         logs=result.logs,
         error=result.error,
+    )
+
+
+@router.post("/exec_python", response_model=StubResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
+async def exec_python(
+    request: Request,
+    current: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(connection.get_audit_db),
+):
+    """Stub for Python execution - intentionally not implemented.
+
+    Code execution is a significant security risk and is not supported.
+    All execution attempts are logged.
+    """
+    await audit_core.log_tool_command(
+        db,
+        user_id=current["user_id"],
+        tool="exec_python",
+        status="blocked",
+        reason="intentionally_not_implemented",
+    )
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="exec_python is intentionally not implemented for security reasons",
+    )
+
+
+@router.post("/exec_shell", response_model=StubResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
+async def exec_shell(
+    request: Request,
+    current: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(connection.get_audit_db),
+):
+    """Stub for shell command execution - intentionally not implemented.
+
+    Shell execution is a significant security risk and is not supported.
+    All execution attempts are logged.
+    """
+    await audit_core.log_tool_command(
+        db,
+        user_id=current["user_id"],
+        tool="exec_shell",
+        status="blocked",
+        reason="intentionally_not_implemented",
+    )
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="exec_shell is intentionally not implemented for security reasons",
     )

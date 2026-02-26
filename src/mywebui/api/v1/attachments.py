@@ -5,8 +5,11 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from mywebui import storage
+from mywebui.core import audit as audit_core
+from mywebui.db import connection
 
 router = APIRouter()
 
@@ -103,4 +106,44 @@ async def delete_attachment(
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Attachment not found",
+    )
+
+
+class AttachmentIngestRequest(BaseModel):
+    """Request to process/ingest an attachment."""
+
+    extract_text: bool = True
+    generate_thumbnail: bool = False
+
+
+class AttachmentIngestResponse(BaseModel):
+    """Response for attachment ingestion."""
+
+    status_code: int
+    detail: str
+    attachment_id: uuid.UUID
+
+
+@router.post("/{attachment_id}/ingest", response_model=AttachmentIngestResponse, status_code=status.HTTP_501_NOT_IMPLEMENTED)
+async def ingest_attachment(
+    attachment_id: uuid.UUID,
+    request: AttachmentIngestRequest,
+    current: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(connection.get_audit_db),
+):
+    """Stub for attachment ingestion - intentionally not implemented.
+
+    Attachment processing (OCR, transcription, thumbnail generation) is not yet implemented.
+    This endpoint returns 501 until the feature is developed.
+    """
+    await audit_core.log_tool_command(
+        db,
+        user_id=current["user_id"],
+        tool="attachment_ingest",
+        status="blocked",
+        reason="intentionally_not_implemented",
+    )
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Attachment ingestion is not yet implemented. Uploaded files are stored but not processed.",
     )
