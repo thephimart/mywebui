@@ -94,13 +94,16 @@ async def exec_python(
     Code execution is a significant security risk and is not supported.
     All execution attempts are logged.
     """
-    await audit_core.log_tool_command(
-        db,
-        user_id=current["user_id"],
-        tool="exec_python",
-        status="blocked",
-        reason="intentionally_not_implemented",
-    )
+    try:
+        await audit_core.log_tool_command(
+            db,
+            user_id=current["user_id"],
+            tool="exec_python",
+            status="blocked",
+            reason="intentionally_not_implemented",
+        )
+    except Exception:
+        pass  # Don't fail the 501 response if audit fails
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="exec_python is intentionally not implemented for security reasons",
@@ -118,13 +121,16 @@ async def exec_shell(
     Shell execution is a significant security risk and is not supported.
     All execution attempts are logged.
     """
-    await audit_core.log_tool_command(
-        db,
-        user_id=current["user_id"],
-        tool="exec_shell",
-        status="blocked",
-        reason="intentionally_not_implemented",
-    )
+    try:
+        await audit_core.log_tool_command(
+            db,
+            user_id=current["user_id"],
+            tool="exec_shell",
+            status="blocked",
+            reason="intentionally_not_implemented",
+        )
+    except Exception:
+        pass  # Don't fail the 501 response if audit fails
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="exec_shell is intentionally not implemented for security reasons",

@@ -1,6 +1,5 @@
 """Config API routes for system and user configuration."""
 
-
 import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -13,6 +12,7 @@ router = APIRouter()
 
 class SystemConfigResponse(BaseModel):
     """System configuration response."""
+
     version: str
     server: dict
     security: dict
@@ -23,6 +23,7 @@ class SystemConfigResponse(BaseModel):
 
 class ProfileConfigResponse(BaseModel):
     """User profile configuration response."""
+
     username: str
     display_name: str
     preferences: dict
@@ -30,6 +31,7 @@ class ProfileConfigResponse(BaseModel):
 
 class ProfileConfigUpdate(BaseModel):
     """User profile configuration update."""
+
     display_name: str | None = None
     preferences: dict | None = None
 
@@ -88,6 +90,10 @@ async def update_system_config(
 
     with open(config_path, "w") as f:
         yaml.dump(config_data, f)
+
+    from mywebui.config import get_config
+
+    get_config.cache_clear()
 
     return {"success": True}
 

@@ -1,6 +1,6 @@
 [project]
 name = "mywebui"
-version = "0.1.0a2"
+version = "0.1.0a3"
 description = "Local-first AI workbench and web UI for automation workloads (pure Python)"
 readme = "README.md"
 requires-python = ">=3.12"

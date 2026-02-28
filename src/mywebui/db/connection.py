@@ -65,19 +65,23 @@ def upgrade_user_db(db_url: str) -> None:
         raise RuntimeError(f"User database upgrade failed: {e}") from e
 
 
-def stamp_db(db_url: str, is_user_db: bool) -> None:
+def stamp_db(db_url: str, is_user_db: bool, is_audit_db: bool = False) -> None:
     """Stamp a database with head revision without running migrations.
 
     Args:
         db_url: The database URL to stamp.
         is_user_db: True for user DB, False for docs DB.
+        is_audit_db: True for audit DB.
     """
     from alembic import command
     from alembic.config import Config
 
     sync_url = db_url.replace("sqlite+aiosqlite://", "sqlite://")
 
-    ini_file = "alembic_users.ini" if is_user_db else "alembic_docs.ini"
+    if is_audit_db:
+        ini_file = "alembic_audit.ini"
+    else:
+        ini_file = "alembic_users.ini" if is_user_db else "alembic_docs.ini"
     alembic_cfg = Config(ini_file)
     alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
 
@@ -123,7 +127,7 @@ def database_exists(db_url: str) -> bool:
     return Path(db_path).exists()
 
 
-def _sync_create_tables(db_url: str, is_user_db: bool) -> None:
+def _sync_create_tables(db_url: str, is_user_db: bool, is_audit_db: bool = False) -> None:
     """Synchronously create tables using sync SQLAlchemy.
 
     This is only for initial bootstrap of new databases.
@@ -132,9 +136,11 @@ def _sync_create_tables(db_url: str, is_user_db: bool) -> None:
     Args:
         db_url: The database URL.
         is_user_db: True for user DB, False for docs DB.
+        is_audit_db: True for audit DB.
     """
     from sqlalchemy import create_engine
 
+    from mywebui.db.models import AuditEvent
     from mywebui.db.models import Base as DocsBase
     from mywebui.db.user_models import Base as UserBase
 
@@ -142,8 +148,11 @@ def _sync_create_tables(db_url: str, is_user_db: bool) -> None:
     engine = create_engine(sync_url, echo=False)
 
     try:
-        base = UserBase if is_user_db else DocsBase
-        base.metadata.create_all(engine)
+        if is_audit_db:
+            AuditEvent.metadata.create_all(engine)
+        else:
+            base = UserBase if is_user_db else DocsBase
+            base.metadata.create_all(engine)
     finally:
         engine.dispose()
 
@@ -161,6 +170,41 @@ def init_docs_db() -> None:
     else:
         _sync_create_tables(db_url, is_user_db=False)
         stamp_db(db_url, is_user_db=False)
+
+
+def upgrade_audit_db(db_url: str) -> None:
+    """Upgrade audit database to latest schema using Alembic.
+
+    Args:
+        db_url: The database URL to upgrade.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    sync_url = db_url.replace("sqlite+aiosqlite://", "sqlite://")
+
+    alembic_cfg = Config("alembic_audit.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", sync_url)
+
+    try:
+        command.upgrade(alembic_cfg, "head")
+    except Exception as e:
+        raise RuntimeError(f"Audit database upgrade failed: {e}") from e
+
+
+def init_audit_db() -> None:
+    """Initialize the audit database with Alembic or create_all for new DBs."""
+    storage.ensure_dirs()
+    db_url = storage.get_audit_db_url()
+
+    if database_exists(db_url):
+        if not has_alembic_version_table(db_url):
+            stamp_db(db_url, is_user_db=False, is_audit_db=True)
+        else:
+            upgrade_audit_db(db_url)
+    else:
+        _sync_create_tables(db_url, is_user_db=False, is_audit_db=True)
+        stamp_db(db_url, is_user_db=False, is_audit_db=True)
 
 
 def init_user_db(username: str) -> None:

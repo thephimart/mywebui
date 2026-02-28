@@ -34,6 +34,11 @@
 | A3 | Wizard Flow (existing data detection) | ✅ Complete |
 | A4 | Audit Event Coverage (13 event types) | ✅ Complete |
 | A5 | FRONTEND_CONTRACT.md | ✅ Complete |
+| - | Wizard invariant fix (system.yaml by wizard only) | ✅ Complete |
+| - | Config cache fix (lru_cache cleared on set_data_dir) | ✅ Complete |
+| - | Audit DB initialization (alembic_audit env) | ✅ Complete |
+| - | 501 endpoint error handling fixes | ✅ Complete |
+| - | Contract: Profile settings now working | ✅ Complete |
 
 **Test Results**: 84 tests passing
 

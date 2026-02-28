@@ -1,6 +1,6 @@
 # FRONTEND_CONTRACT.md
 
-**Version**: 0.1.0-alpha  
+**Version**: 0.1.0a3  
 **Last Updated**: 2026-02-26  
 **Purpose**: Binding interface contract for frontend development. A frontend developer should be able to build without reading backend code.
 
@@ -475,21 +475,17 @@ Request: { ...config object... }
 Response: { "success": true }
 ```
 
-### Get Profile Config (STUB - Deferred)
+### Get Profile Config
 ```
 GET /api/v1/config/profile
-Response: 501 Not Implemented
-Code: NOT_IMPLEMENTED
-Reason: Per-user profile settings deferred (Phase B3)
+Response: { "username": "string", "display_name": "string", "preferences": {} }
 ```
 
-### Update Profile Config (STUB - Deferred)
+### Update Profile Config
 ```
 PATCH /api/v1/config/profile
 Request: { "display_name": "string|null", "preferences": {}|null }
-Response: 501 Not Implemented
-Code: NOT_IMPLEMENTED
-Reason: Per-user profile settings deferred (Phase B3)
+Response: { "username": "string", "display_name": "string", "preferences": {} }
 ```
 
 ---
@@ -567,7 +563,7 @@ Response: { "events": [{ "id": "uuid", "timestamp": "ISO8601", "user_id": "uuid|
 
 ```
 GET /api/v1/health
-Response: { "status": "healthy", "version": "0.1.0a1" }
+Response: { "status": "healthy", "version": "0.1.0a3" }
 ```
 
 ---
@@ -579,7 +575,7 @@ The following are intentionally not implemented and not in scope for v1 frontend
 - **exec_python tool**: Always returns 501 (security)
 - **exec_shell tool**: Always returns 501 (security)
 - **Attachment ingestion/processing**: Always returns 501 (OCR, transcription, thumbnails not implemented)
-- **Profile settings**: Always returns 501 (per-user preferences deferred to Phase B3)
+- **Profile settings**: Working (per-user preferences)
 - **TTS (Text-to-Speech)**: Model config exists but no playback UI
 - **STT (Speech-to-Text)**: Not implemented
 - **Public user profiles**: Not exposed

@@ -5,7 +5,9 @@ from pathlib import Path
 
 def get_storage_dir() -> Path:
     """Get the storage directory path."""
-    return Path.home() / ".mywebui"
+    from mywebui import config as app_config
+
+    return app_config.get_config().data_dir
 
 
 def get_user_dir(username: str) -> Path:
@@ -107,50 +109,5 @@ def get_user_db_url(username: str) -> str:
 
 
 def init_storage() -> None:
-    """Initialize storage - create directories and default config."""
+    """Initialize storage - create directories."""
     ensure_dirs()
-
-    config_dir = get_config_dir()
-    system_config = config_dir / "system.yaml"
-
-    if not system_config.exists():
-        default_config = """version: "1.0"
-
-server:
-  host: "0.0.0.0"
-  port: 8000
-
-security:
-  session_rolling_ttl_hours: 24
-  session_absolute_max_days: 7
-
-models:
-  main:
-    provider: openai-compatible
-    url: "http://localhost:11434"
-    model: "llama3"
-  summarizer:
-    provider: openai-compatible
-    url: "http://localhost:11434"
-    model: "llama3"
-  embedding:
-    provider: openai-compatible
-    url: "http://localhost:11433"
-    model: "nomic-embed-text"
-
-tools:
-  filesystem:
-    enabled: true
-    allowed_paths: []
-  web:
-    enabled: false
-
-comfyui:
-  mode: local
-  url: "http://localhost:8188"
-  limits:
-    max_steps: 100
-    max_resolution: 1024
-"""
-        with open(system_config, "w") as f:
-            f.write(default_config)

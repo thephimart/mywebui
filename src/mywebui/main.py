@@ -30,13 +30,14 @@ async def lifespan(app: FastAPI):
     from mywebui.db import connection
 
     connection.init_docs_db()
+    connection.init_audit_db()
     yield
 
 
 app = FastAPI(
     title="mywebui",
     description="Local-first Web UI for AI and automation workloads",
-    version="0.1.0a1",
+    version="0.1.0a3",
     lifespan=lifespan,
 )
 
@@ -66,14 +67,44 @@ app.include_router(wizard.router, prefix="/api/v1/wizard", tags=["wizard"])
 @app.get("/api/v1/health")
 async def health_check() -> dict:
     """Health check endpoint."""
-    return {"status": "healthy", "version": "0.1.0a1"}
+    return {"status": "healthy", "version": "0.1.0a3"}
 
 
 def main() -> None:
     """Run the application."""
+    import argparse
+
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    parser = argparse.ArgumentParser(description="mywebui - Local-first Web UI for AI and automation workloads")
+    parser.add_argument(
+        "-l",
+        "--listen",
+        nargs="?",
+        const="0.0.0.0,::",
+        default="127.0.0.1",
+        help="IP address to listen on (default: 127.0.0.1). If provided without argument, defaults to 0.0.0.0,::",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=8000,
+        help="Set the listen port (default: 8000)",
+    )
+    parser.add_argument(
+        "-d",
+        "--directory",
+        default="~/.mywebui",
+        help="Root directory for all configs and storage (default: ~/.mywebui)",
+    )
+    args = parser.parse_args()
+
+    from mywebui import config as app_config
+
+    app_config.set_data_dir(args.directory)
+
+    uvicorn.run(app, host=args.listen, port=args.port)
 
 
 if __name__ == "__main__":

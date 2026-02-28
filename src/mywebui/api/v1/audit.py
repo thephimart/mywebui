@@ -53,39 +53,42 @@ async def list_audit_events(
     db: AsyncSession = Depends(connection.get_audit_db),
 ):
     """List audit events (admin only)."""
-    query = select(AuditEvent).order_by(desc(AuditEvent.timestamp))
+    try:
+        query = select(AuditEvent).order_by(desc(AuditEvent.timestamp))
 
-    if event_type:
-        query = query.where(AuditEvent.event_type == event_type)
+        if event_type:
+            query = query.where(AuditEvent.event_type == event_type)
 
-    if user_id:
-        query = query.where(AuditEvent.user_id == user_id)
+        if user_id:
+            query = query.where(AuditEvent.user_id == str(user_id))
 
-    query = query.offset(skip).limit(limit)
+        query = query.offset(skip).limit(limit)
 
-    result = await db.execute(query)
-    events = list(result.scalars().all())
+        result = await db.execute(query)
+        events = list(result.scalars().all())
 
-    count_query = select(func.count(AuditEvent.id))
-    if event_type:
-        count_query = count_query.where(AuditEvent.event_type == event_type)
-    if user_id:
-        count_query = count_query.where(AuditEvent.user_id == user_id)
+        count_query = select(func.count(AuditEvent.id))
+        if event_type:
+            count_query = count_query.where(AuditEvent.event_type == event_type)
+        if user_id:
+            count_query = count_query.where(AuditEvent.user_id == str(user_id))
 
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
 
-    return ListAuditEventsResponse(
-        events=[
-            AuditEventResponse(
-                id=e.id,
-                timestamp=e.timestamp,
-                user_id=e.user_id,
-                event_type=e.event_type,
-                details=e.details,
-                request_id=e.request_id,
-            )
-            for e in events
-        ],
-        total=total,
-    )
+        return ListAuditEventsResponse(
+            events=[
+                AuditEventResponse(
+                    id=e.id,
+                    timestamp=e.timestamp,
+                    user_id=e.user_id,
+                    event_type=e.event_type,
+                    details=e.details,
+                    request_id=e.request_id,
+                )
+                for e in events
+            ],
+            total=total,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit error: {type(e).__name__}: {e}")

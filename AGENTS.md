@@ -20,9 +20,24 @@ pip install -e ".[dev]"
 ### Running the Application
 ```bash
 source .venv/bin/activate
+
+# Using the CLI (recommended):
+python -m mywebui.main                    # 127.0.0.1:8000, ~/.mywebui
+python -m mywebui.main -l                 # 0.0.0.0,:: :8000
+python -m mywebui.main -l 0.0.0.0 -p 9000  # specific host/port
+python -m mywebui.main -d /path/to/data  # custom data directory
+
+# Or using uvicorn directly:
 uvicorn mywebui.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 600
 ```
-**Note**: `--timeout-keep-alive 600` is required for long-running LLM requests.
+
+**CLI Options:**
+- `-l, --listen [IP]` - IP to listen on (default: 127.0.0.1). Without argument, defaults to `0.0.0.0,::`
+- `-p, --port [PORT]` - Port (default: 8000)
+- `-d, --directory [PATH]` - Data directory (default: ~/.mywebui)
+- `-h, --help` - Show help
+
+**Note**: `--timeout-keep-alive 600` is required for long-running LLM requests when using uvicorn directly.
 
 ### Linting & Type Checking
 ```bash

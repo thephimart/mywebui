@@ -136,13 +136,16 @@ async def ingest_attachment(
     Attachment processing (OCR, transcription, thumbnail generation) is not yet implemented.
     This endpoint returns 501 until the feature is developed.
     """
-    await audit_core.log_tool_command(
-        db,
-        user_id=current["user_id"],
-        tool="attachment_ingest",
-        status="blocked",
-        reason="intentionally_not_implemented",
-    )
+    try:
+        await audit_core.log_tool_command(
+            db,
+            user_id=current["user_id"],
+            tool="attachment_ingest",
+            status="blocked",
+            reason="intentionally_not_implemented",
+        )
+    except Exception:
+        pass  # Don't fail the 501 response if audit fails
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Attachment ingestion is not yet implemented. Uploaded files are stored but not processed.",

@@ -9,6 +9,15 @@ import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 
+_data_dir_override: Path | None = None
+
+
+def set_data_dir(path: str) -> None:
+    """Set the data directory override."""
+    global _data_dir_override
+    _data_dir_override = Path(path).expanduser().resolve()
+    get_config.cache_clear()
+
 
 class ProviderType(StrEnum):
     """Model provider types."""
@@ -105,6 +114,8 @@ class Config(BaseSettings):
     @property
     def data_dir(self) -> Path:
         """Get the data directory."""
+        if _data_dir_override:
+            return _data_dir_override
         return Path.home() / ".mywebui"
 
     @property

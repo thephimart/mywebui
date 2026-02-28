@@ -87,7 +87,11 @@ def _detect_existing_data() -> dict | None:
     if users_dir.exists():
         existing["user_dirs"] = len(list(users_dir.iterdir()))
 
-    return existing if existing else None
+    has_real_data = existing.get("users", 0) > 0 or existing.get("documents", 0) > 0
+    if not has_real_data:
+        return None
+
+    return existing
 
 
 def _is_initialized() -> bool:
@@ -100,8 +104,9 @@ def _is_initialized() -> bool:
 async def get_wizard_status():
     """Get the current wizard state."""
     existing_data = _detect_existing_data()
+    is_init = _is_initialized()
 
-    if not _is_initialized():
+    if not is_init:
         if existing_data:
             return WizardStatusResponse(
                 state="needs_setup_with_existing_data",
@@ -146,6 +151,15 @@ async def create_admin_user(request: AdminCreateRequest):
             password=request.password,
             role="admin",
         )
+
+    import yaml
+
+    system_config = {
+        "version": "1.0",
+        "initialized": True,
+    }
+    with open(config_path, "w") as f:
+        yaml.dump(system_config, f)
 
     return AdminCreateResponse(
         user_id=str(user.id),
