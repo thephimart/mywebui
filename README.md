@@ -18,9 +18,38 @@ No hidden execution.
 
 **Current phase**: Backend spine frozen.
 - Backend is **structurally complete** (not feature-complete)
-- APIs stable, data models stable
+- APIs stable, data models stable (within alpha tags)
 - Alembic is the authoritative schema
 - FRONTEND_CONTRACT.md defines the complete frontend boundary
+
+---
+
+## Who this is for
+
+**This project is for you if**:
+- You want a **local, auditable AI system** you fully control
+- You care about **security invariants** and data ownership
+- You prefer explicit contracts over "magic" abstractions
+- You are comfortable running Python services locally
+
+**This project is NOT for you if**:
+- You want a hosted SaaS or cloud deployment
+- You want zero-config "just works" automation
+- You expect UI-first workflows today
+- You want frequent breaking changes without clear migration paths
+
+---
+
+## Alpha Warning
+
+This is an **alpha** release.
+
+- Expect breaking changes between alpha tags
+- No upgrade guarantees until beta
+- APIs and schemas are frozen *within* a tagged alpha, not across them
+- Production use is **not recommended yet**
+
+Alpha tags exist to support frontend development and early adopters.
 
 ---
 
@@ -81,6 +110,20 @@ If something happens, you can see *who*, *when*, and *why*.
 - Web UI (local) — **pending (contract finalized)**
 
 All components communicate via **explicit JSON APIs**.
+
+---
+
+## Quick Start (Developer Preview)
+
+This repository currently targets:
+- Python 3.11+
+- Local execution (WSL, VM, or bare metal)
+- SQLite-backed storage
+
+First run initializes the system via a guided wizard (admin creation, core config).
+
+Packaging, installers, and full setup guides are planned but not yet published.
+See `dev_docs/` for authoritative system behavior and invariants.
 
 ---
 
@@ -148,6 +191,19 @@ This directory contains:
 - Task graph with execution order
 
 The README intentionally stays minimal.
+
+---
+
+## Contributing
+
+This project is currently in a **backend-frozen phase**.
+
+- Issues are welcome
+- PRs should be discussed first
+- Any change affecting persistence, APIs, or security invariants
+  **must** update Alembic migrations and `FRONTEND_CONTRACT.md`
+
+The goal is stability, not velocity.
 
 ---
 
