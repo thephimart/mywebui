@@ -70,9 +70,12 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     },
   });
 
-  if (typeof window !== 'undefined' && response.status === 401) {
-    window.location.href = '/login';
-    throw new Error('UNAUTHORIZED');
+  if (response.status === 401) {
+    const isAuthEndpoint = endpoint === '/auth/login' || endpoint === '/auth/register';
+    if (!isAuthEndpoint && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.href = '/login';
+    }
+    throw new ApiError('UNAUTHORIZED', 'Not authenticated');
   }
 
   if (response.status === 501) {

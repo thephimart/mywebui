@@ -45,7 +45,7 @@ export default function AdminPage() {
             <CardDescription>System configuration</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" disabled>Coming Soon</Button>
+            <Button onClick={() => router.push('/admin/settings')}>Configure</Button>
           </CardContent>
         </Card>
       </div>

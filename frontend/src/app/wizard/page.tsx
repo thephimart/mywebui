@@ -41,7 +41,7 @@ export default function WizardPage() {
 
     try {
       await createWizardAdmin({ username, password });
-      router.push('/chat');
+      router.push('/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create admin');
     } finally {
@@ -64,7 +64,7 @@ export default function WizardPage() {
 
     try {
       await completeWizard({ username, password, action });
-      router.push('/chat');
+      router.push('/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to complete wizard');
     } finally {

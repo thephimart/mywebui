@@ -123,7 +123,6 @@ async def login(
         key="session_token",
         value=token,
         httponly=True,
-        samesite="lax",
         expires=session.expires_at.replace(tzinfo=UTC),
     )
 

@@ -11,9 +11,10 @@ frontend/
 │   │   │   └── register/page.tsx
 │   │   ├── (main)/              # Protected routes
 │   │   │   ├── admin/
-│   │   │   │   ├── page.tsx    # Dashboard
-│   │   │   │   ├── users/page.tsx
-│   │   │   │   └── audit/page.tsx
+│   │   │   │   │   ├── page.tsx    # Dashboard
+│   │   │   │   │   ├── users/page.tsx
+│   │   │   │   │   ├── audit/page.tsx
+│   │   │   │   │   └── settings/page.tsx
 │   │   │   ├── chat/page.tsx
 │   │   │   ├── docs/
 │   │   │   │   ├── page.tsx    # List
@@ -58,7 +59,7 @@ frontend/
 |---------------------|--------|----------------|
 | Base URL `/api/v1` | ✅ | `src/lib/api.ts:41` |
 | HTTP-only cookies | ✅ | `credentials: 'include'` |
-| 401 → redirect to /login | ✅ | `apiFetch:73-76` |
+| 401 → redirect to /login | ✅ | `apiFetch:73-82` |
 | 501 → ApiError | ✅ | `apiFetch:78-81` |
 | All endpoints implemented | ✅ | 41 functions |
 | Capability gating | ✅ | `useCapabilities.ts` |
@@ -135,7 +136,7 @@ frontend/
 - **Base URL**: `/api/v1`
 - **Auth**: HTTP-only cookies via `credentials: 'include'`
 - **Error handling**:
-  - 401 → `window.location.href = '/login'`
+  - 401 → `window.location.href = '/login'` (if not already on login page)
   - 501 → throw `ApiError('NOT_IMPLEMENTED', ...)`
   - Other errors → throw `ApiError` with canonical code
 
@@ -189,6 +190,7 @@ No server truth stored (messages, documents, config all fetched on demand).
 /admin
 /admin/users
 /admin/audit
+/admin/settings
 /settings
 /settings/sessions
 ```
@@ -237,6 +239,19 @@ useEffect(() => {
 }, [user]);
 ```
 
+### 3. Wizard/Login Redirect Loops (2026-03-03)
+
+**Problem**: 
+- Wizard completion redirects to `/login` but session not set
+- 401 on `/auth/me` triggers redirect creating infinite loop
+- `router.push()` triggers pathname change causing effect to re-run
+
+**Solution**: 
+- Use `checkedRef` keyed by pathname to prevent effect re-run on navigation
+- Use `window.location.href` for login redirect (full page reload)
+- Only call `getCurrentUser()` when wizard is completed AND not on auth pages
+- Add guard to prevent 401 redirect when already on login page
+
 ---
 
 ## Build Status
@@ -257,6 +272,8 @@ npm run lint:  ✅ Pass
 | PR Rejection Checklist | ✅ 36/36 |
 | Streaming Race Condition | ✅ Fixed |
 | Admin Fetch Timing | ✅ Fixed |
+| Wizard/Login Loops | ✅ Fixed |
+| Admin Settings Page | ✅ Added |
 | Build | ✅ Passes |
 | Lint | ✅ Passes |
 

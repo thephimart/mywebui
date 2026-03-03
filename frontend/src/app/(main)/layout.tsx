@@ -12,7 +12,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const { user, isAuthenticated, isLoading } = useSessionStore();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated && pathname !== '/login' && pathname !== '/register') {
       router.push(`/login?redirect=${pathname}`);
     }
   }, [isLoading, isAuthenticated, router, pathname]);
